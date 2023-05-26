@@ -4,3 +4,4 @@ python-jose
 passlib[bcrypt]
 PyYAML
 pymongo
+python-multipart

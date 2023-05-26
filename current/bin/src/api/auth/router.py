@@ -82,11 +82,13 @@ async def refresh_token(query: schemas.RefreshTokenQuery):
     }
 
 async def get_current_user(authorization: Annotated[str | None, Header()] = None):
-    fields = authorization.split(' ')
-    if len(fields) != 2:
+    try:
+        fields = authorization.split(' ')
+        token = fields[1]
+    except:
         raise HTTPException(status_code=422, detail="token not found in the request")
 
-    _id = utils.verify_token(fields[1], "access")
+    _id = utils.verify_token(token, "access")
 
     try:
         users = users_c.find({"_id": _id})

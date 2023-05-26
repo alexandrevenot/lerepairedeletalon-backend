@@ -6,10 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 import src.api.auth.router as auth_router
+import src.api.stallions.router as stallions_router
 
 server = FastAPI()
 
 server.include_router(auth_router.router)
+server.include_router(stallions_router.router)
 
 origins = [
     "http://localhost:4200",
