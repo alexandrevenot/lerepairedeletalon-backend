@@ -7,13 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 import src.api.auth.utils as utils
 import src.api.auth.schemas as schemas
 
+# global config
+global_config = utils.load_global_config()
+
 # config
 config = utils.load_config()
 
 # db
 mongo_url = "mongodb://localhost:27017/"
 client = MongoClient(mongo_url)
-db = client.test
+db = getattr(client, global_config['db_to_use'])
 users_c = db.users
 
 # routes

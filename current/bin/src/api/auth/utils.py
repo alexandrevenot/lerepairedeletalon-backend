@@ -14,6 +14,10 @@ ALGORITHM = "HS256"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+def load_global_config() -> dict:
+    with open('/lerepairedeletalon/server/current/etc/config.yaml', 'r') as f:
+        return yaml.load(f, Loader=yaml.FullLoader)
+
 def load_config() -> dict:
     with open('/lerepairedeletalon/server/current/etc/auth/config.yaml', 'r') as f:
         return yaml.load(f, Loader=yaml.FullLoader)
