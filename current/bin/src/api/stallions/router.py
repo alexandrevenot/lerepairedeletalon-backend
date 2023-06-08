@@ -32,7 +32,8 @@ async def search(
     min_price: int = None,
     max_price: int = None,
     breeds: Annotated[list[str] | None, Query()] = None,
-    colors: Annotated[list[str] | None, Query()] = None
+    colors: Annotated[list[str] | None, Query()] = None,
+    current_user = Depends(auth_router.get_current_user)
 ):
     if page <= 0:
         raise HTTPException(status_code=422, detail="page can't be <= 0")
@@ -41,20 +42,20 @@ async def search(
 
     # price
     price_query = {}
-    if min_price:
+    if min_price is not None:
         price_query["$gte"] = min_price
-    if max_price:
+    if max_price is not None:
         price_query["$lte"] = max_price
     
     if price_query:
         query["price"] = price_query
 
     # breed
-    if breeds:
+    if breeds is not None:
         query["breed"] = {"$in": breeds}
-    if colors:
+    if colors is not None:
         query["color"] = {"$in": colors}
-    
+
     cursor = stallions_c.find(query, {"_id": 1, "name": 1, "location": 1, "price": 1}).skip((page - 1) * limit).limit(limit)
 
     mp_l = []
@@ -78,6 +79,23 @@ async def get_profile_pic(id: str, current_user = Depends(auth_router.get_curren
         return Response(content=image_data, media_type=image_content_type)
     else:
         return HTTPException(status_code=404, detail="Image not found.")
+
+@router.get('/stallion-profile')
+async def get_stallion_profile(id: str):#, current_user = Depends(auth_router.get_current_user)):
+    stallion = stallions_c.find_one(
+        {"_id": ObjectId(id)},
+        {
+            "_id": 0,
+            "c_saillies": 0,
+            "photos": 0
+        }
+    )
+    
+    if stallion:
+        stallion["owner"] = str(stallion["owner"])
+        return {"stallion_profile": stallion}
+    else:
+        return HTTPException(status_code=404, detail="Stallion not found.")
 
 @router.post('/register-new-stallion')
 async def register_new_stallion(
