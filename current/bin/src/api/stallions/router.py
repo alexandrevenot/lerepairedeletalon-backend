@@ -1,11 +1,10 @@
 import traceback
-import io
 from bson.objectid import ObjectId
 from typing import Annotated
 
 from pymongo import MongoClient
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Query
+from fastapi.responses import Response
 
 import src.api.stallions.utils as utils
 import src.api.stallions.schemas as schemas
@@ -27,14 +26,36 @@ stallions_c = db.stallions
 router = APIRouter(prefix='/stallions')
 
 @router.get('/search', response_model=schemas.SearchRM)
-async def search(nb: int, num_page: int):
-    if num_page <= 0:
-        raise HTTPException(status_code=422, detail="parameters can't be <= 0")
-    
-    if nb != config["search_spp"]:
-        raise HTTPException(status_code=422, detail=f"nb must be equal to {config['search_spp']}")
+async def search(
+    page: int,
+    limit: int,
+    min_price: int = None,
+    max_price: int = None,
+    breeds: Annotated[list[str] | None, Query()] = None,
+    colors: Annotated[list[str] | None, Query()] = None
+):
+    if page <= 0:
+        raise HTTPException(status_code=422, detail="page can't be <= 0")
 
-    cursor = stallions_c.find().skip((num_page - 1) * nb).limit(nb)
+    query = {}
+
+    # price
+    price_query = {}
+    if min_price:
+        price_query["$gte"] = min_price
+    if max_price:
+        price_query["$lte"] = max_price
+    
+    if price_query:
+        query["price"] = price_query
+
+    # breed
+    if breeds:
+        query["breed"] = {"$in": breeds}
+    if colors:
+        query["color"] = {"$in": colors}
+    
+    cursor = stallions_c.find(query, {"_id": 1, "name": 1, "location": 1, "price": 1}).skip((page - 1) * limit).limit(limit)
 
     mp_l = []
     for document in cursor:
@@ -47,14 +68,14 @@ async def search(nb: int, num_page: int):
     
     return schemas.SearchRM(content=mp_l)
 
-@router.get('/get-profile-img')
-async def get_profile_img(id: str):
+@router.get('/get-profile-pic')
+async def get_profile_pic(id: str, current_user = Depends(auth_router.get_current_user)):
     stallion = stallions_c.find_one({"_id": ObjectId(id)})
 
     if stallion:
         image_data = stallion["photos"][0]["data"]
         image_content_type = stallion["photos"][0]["content_type"]
-        return StreamingResponse(io.BytesIO(image_data), media_type=image_content_type)
+        return Response(content=image_data, media_type=image_content_type)
     else:
         return HTTPException(status_code=404, detail="Image not found.")
 
@@ -75,7 +96,7 @@ async def register_new_stallion(
     pedigree_po: Annotated[str, Form()],
     comments: Annotated[str, Form()],
     r_types: Annotated[list[str], Form()],
-    price: Annotated[str, Form()],
+    price: Annotated[int, Form()],
     location: Annotated[str, Form()],
     current_user = Depends(auth_router.get_current_user)
 ):
@@ -130,13 +151,3 @@ async def register_new_stallion(
             raise HTTPException(status_code=500, detail="failed to write stallions collection")
 
     return {"message": "stallion registered successfully"}    
-
-@router.post("/files/")
-async def create_file(file: Annotated[bytes, File()]):
-    return {"file_size": len(file)}
-
-@router.post("/uploadfile/")
-async def create_upload_file(file: Annotated[UploadFile, File()], token: Annotated[str, Form()]):
-    contents = await file.read()
-    print(len(contents))
-    return {"filename": file.filename}
