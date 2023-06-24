@@ -1,0 +1,16 @@
+status:
+  - requested
+  - accepted
+  - bought
+  - declared_done
+  - confirmed_done
+
+groups:
+  pending:
+    - requested
+    - accepted
+  onGoing:
+    - bought
+    - declared_done
+  done:
+    - confirmed_done

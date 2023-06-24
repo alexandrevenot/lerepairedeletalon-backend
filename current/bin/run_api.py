@@ -7,11 +7,13 @@ import uvicorn
 
 import src.api.auth.router as auth_router
 import src.api.stallions.router as stallions_router
+import src.api.covers.router as covers_router
 
 server = FastAPI()
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
+server.include_router(covers_router.router)
 
 origins = [
     "http://localhost:4200",

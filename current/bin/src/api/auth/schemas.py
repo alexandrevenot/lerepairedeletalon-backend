@@ -56,3 +56,8 @@ class UserInDB(BaseModel):
     lastname: str
     email: str
     hashedpassword: str
+
+class GetUserRM(BaseModel):
+    firstname: str
+    lastname: str
+    

@@ -89,7 +89,7 @@ async def get_current_user(authorization: Annotated[str | None, Header()] = None
         fields = authorization.split(' ')
         token = fields[1]
     except:
-        raise HTTPException(status_code=422, detail="token not found in the request")
+        raise HTTPException(status_code=401, detail="token not found in the request")
 
     _id = utils.verify_token(token, "access")
 
@@ -100,6 +100,9 @@ async def get_current_user(authorization: Annotated[str | None, Header()] = None
         print(traceback.format_exc())
         raise HTTPException(status_code=401)
 
-@router.get('/protected-route')
-async def gg(current_user = Depends(get_current_user)):
-    return {"message": "gg"}
+@router.get('/get-user')
+async def get_user(current_user = Depends(get_current_user)):
+    return schemas.GetUserRM(
+        firstname=current_user['firstname'],
+        lastname=current_user['lastname']
+    )

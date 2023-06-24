@@ -22,6 +22,16 @@ class MosaicProfileInfo(BaseModel):
     name: str
     location: str
     price: int
+    photoId: str
 
 class SearchRM(BaseModel):
     content: list[MosaicProfileInfo]
+
+class DashboardStallionBox(BaseModel):
+    id: str
+    name: str
+    breed: str
+    photoId: str
+
+class GetMyStallionsRM(BaseModel):
+    content: list[DashboardStallionBox]
