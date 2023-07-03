@@ -1,0 +1,32 @@
+import pandas as pd
+import numpy as np
+import bisect
+import unicodedata
+
+NORMALIZED_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/geoloc_normalized.csv', sep=",")
+COMPLETE_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/geoloc_not_normalized.csv', sep=",")
+
+def find_city_not_normalized(city):
+    cities = []
+    index = bisect.bisect_left(NORMALIZED_DF.loc[:,'city'], city)
+    if index and NORMALIZED_DF.loc[index, 'city'] == city:
+        cities.append(COMPLETE_DF.loc[index,:])
+        index += 1
+
+        while NORMALIZED_DF.loc[index, 'city'] == city:
+            cities.append(COMPLETE_DF.loc[index,:])
+            index += 1
+
+        return cities
+    else:
+        return False
+
+def normalize(city_input):
+    res = city_input.replace("-", "")
+    res = unicodedata.normalize('NFKD', res).encode('ASCII', 'ignore').decode('utf-8')
+    res = res.lower()
+    res = res.replace(" ", "")
+    return res.replace("'", "")
+
+def find_city(city_input) -> list[pd.core.series.Series] | bool :
+    return find_city_not_normalized(normalize(city_input))

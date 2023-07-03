@@ -42,12 +42,25 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
             # building document
             new_document = cover.dict()
 
+            ## adding date, and buyer_id
             new_document.update({
                 "buyer_id": current_user["_id"],
                 "date": datetime.now()
                 })
             
-            stallion_in_db = stallions_c.find_one({"n_sire": new_document["stallion_nsire"]}, {"name": 1})
+            ## fetching stallion name
+            try:
+                stallion_in_db = stallions_c.find_one(
+                    {
+                        "n_sire": new_document["stallion_nsire"]
+                    },
+                    {
+                        "name": 1
+                    })
+            except:
+                print(traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to read stallions collection")
+            
             try:
                 new_document.update({
                     "stallion_name": stallion_in_db["name"]
@@ -72,8 +85,8 @@ async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user 
     if cover_in_db is None:
         raise HTTPException(status_code=404, detail="no cover exists with this id")
     else:
-        if (cover_in_db["status"] in ["requested", "bought"] and current_user["_id"] != cover_in_db["seller_id"]) \
-            or (cover_in_db["status"] in ["accepted", "declared_done"] and current_user["_id"] != cover_in_db["buyer_id"]):
+        if (cover_in_db["status"] in ["offered", "purchased", "committed"] and current_user["_id"] != cover_in_db["seller_id"]) \
+            or (cover_in_db["status"] in ["approved", "declared_terminated"] and current_user["_id"] != cover_in_db["buyer_id"]):
             raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
         try:

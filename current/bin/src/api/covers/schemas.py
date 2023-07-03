@@ -18,9 +18,9 @@ class CoverQuery(BaseModel):
 
     @validator('status')
     def status_validator(cls, v):
-        possible_values = config["status"]
-        if v not in possible_values:
-            raise HTTPException(status_code=422, detail=f"status has to be in {possible_values}")
+        first_value = config["status"][0]
+        if v != first_value:
+            raise HTTPException(status_code=422, detail=f"status has to be {first_value}")
         return v
 
     @validator('seller_id')

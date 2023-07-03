@@ -1,16 +1,18 @@
 status:
-  - requested
-  - accepted
-  - bought
-  - declared_done
-  - confirmed_done
+  - offered
+  - approved
+  - purchased
+  - committed
+  - declared_terminated
+  - confirmed_terminated
 
 groups:
   pending:
-    - requested
-    - accepted
+    - offered
+    - approved
   onGoing:
-    - bought
-    - declared_done
+    - purchased
+    - committed
+    - declared_terminated
   done:
-    - confirmed_done
+    - confirmed_terminated
