@@ -34,8 +34,12 @@ async def search(
     limit: int,
     min_price: int = None,
     max_price: int = None,
+    lat: float = None,
+    lng: float = None,
+    distance: float = None, # km
     breeds: Annotated[list[str] | None, Query()] = None,
-    colors: Annotated[list[str] | None, Query()] = None
+    colors: Annotated[list[str] | None, Query()] = None,
+
 ):
     if page <= 0:
         raise HTTPException(status_code=422, detail="page can't be <= 0")
@@ -50,23 +54,42 @@ async def search(
         price_query["$lte"] = max_price
     
     if price_query:
-        query["price"] = price_query
+        query["prices"] = {}
+        query["prices"]["$elemMatch"] = {}
+        query["prices"]["$elemMatch"]["price"] = price_query
 
     # breed
     if breeds is not None:
         query["breed"] = {"$in": breeds}
+
+    # color
     if colors is not None:
         query["color"] = {"$in": colors}
+    
+    # distance
+    distance_case = 0
+    for var in [lat, lng, distance]:
+        if var is not None:
+            distance_case += 1
+    
+    if distance_case > 0 and distance_case <= 2:
+        raise HTTPException(status_code=422, detail="Incomplete distance parameters")
+    elif distance_case == 3:
+        query["location"] = {}
+        query["location"]["$geoWithin"] = {}
+        query["location"]["$geoWithin"]["$centerSphere"] = [[lng, lat], distance / 6371.0]
 
-    cursor = stallions_c.find(query, {"_id": 1, "name": 1, "location": 1, "price": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
+    cursor = stallions_c.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "postal_code": 1, "prices": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
 
     mp_l = []
     for document in cursor:
         mp_l.append(schemas.MosaicProfileInfo(
             id=str(document["_id"]),
             name=document["name"],
-            location=document["location"],
-            price=document["price"],
+            breed=document["breed"],
+            city=document["city"],
+            postal_code=document["postal_code"],
+            price=min([elt["price"] for elt in document["prices"]]),
             photoId=str(document["photos"][0])
         ))
     
@@ -120,6 +143,7 @@ async def get_my_stallions(current_user = Depends(auth_router.get_current_user))
 
 @router.post('/register-new-stallion')
 async def register_new_stallion(
+    # stallion part
     name: Annotated[str, Form()],
     breed: Annotated[str, Form()],
     n_sire: Annotated[str, Form()],
@@ -127,16 +151,21 @@ async def register_new_stallion(
     photos: list[UploadFile],
     main_desc: Annotated[str, Form()],
     color: Annotated[str, Form()],
+    height: Annotated[float, Form()],
     birthdate: Annotated[str, Form()],
-    height: Annotated[int, Form()],
+    lat: Annotated[float, Form()],
+    lng: Annotated[float, Form()],
+    city: Annotated[str, Form()],
+    postal_code: Annotated[str, Form()], 
     offspring: Annotated[str, Form()],
     performance: Annotated[str, Form()],
     pedigree: Annotated[str, Form()],
     pedigree_po: Annotated[str, Form()],
-    comments: Annotated[str, Form()],
-    r_types: Annotated[str, Form()],
-    price: Annotated[int, Form()],
-    location: Annotated[str, Form()],
+    stallion_additional_info: Annotated[str, Form()],
+    # cover part
+    cover_types: Annotated[str, Form()],
+    prices: Annotated[str, Form()],
+    cover_additional_info: Annotated[str, Form()],
     current_user = Depends(auth_router.get_current_user)
 ):
     # parameters parsing
@@ -147,7 +176,6 @@ async def register_new_stallion(
     c_saillies_f["content_type"] = c_saillies.content_type
     c_saillies_f["data"] = await c_saillies.read()
 
- 
     photos_f = []
     for uploadfile_obj in photos:
         if uploadfile_obj.size > config['photo_max_size']:
@@ -158,19 +186,28 @@ async def register_new_stallion(
         } 
         photos_f.append(p)
     
-    processed_r_types = {}
-    r_types_list = r_types.split(',')
-    for r_type in config["r_types"]:
-        processed_r_types[r_type] = r_type in r_types_list
-    
-    processed_pedigree = {}
-    for i, parent_name in zip(range(1,15), pedigree.split('~')):
-        processed_pedigree["p" + str(i)] = parent_name
+    cover_types_list = cover_types.split(',')
+    processed_prices = []
+    prices_list = prices.split(',')
+    for cover_type, price in zip(cover_types_list, prices_list):
+        if cover_type in config["cover_types"]:
+            processed_prices.append({"cover_type": cover_type, "price": float(price)})
+        else:
+            raise HTTPException(status_code=422, detail=f"unknown cover type '{cover_type}'")
 
     try:
         processed_birthdate = str(datetime.strptime(birthdate, "%d/%m/%Y").date())
     except:
-        raise HTTPException(status_code=422, detail="Incorrect birth_date date format.")
+        raise HTTPException(status_code=422, detail="incorrect birth_date date format.")
+
+    processed_pedigree = {}
+    for i, parent_name in zip(range(1,15), pedigree.split('~')):
+        processed_pedigree["p" + str(i)] = parent_name
+
+    location = {
+        "type": "Point",
+        "coordinates": [lng, lat]
+    }
 
     # add to db
     try:
@@ -205,10 +242,12 @@ async def register_new_stallion(
                 "performance": performance,
                 "pedigree": pedigree,
                 "pedigree_po": pedigree_po,
-                "comments": comments,
-                "r_types": processed_r_types,
-                "price": price,
-                "location": location
+                "stallion_additional_info": stallion_additional_info,
+                "prices": processed_prices,
+                "cover_additional_info": cover_additional_info,
+                "location": location,
+                "city": city,
+                "postal_code": postal_code
             })
         except:
             print(traceback.format_exc())

@@ -1,7 +1,7 @@
 c_saillies_max_size: 10000000 #10Mo
 photo_max_size: 4000000 #4Mo
 
-r_types:
+cover_types:
   - lib
   - iai
   - iarp

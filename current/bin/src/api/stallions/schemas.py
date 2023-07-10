@@ -20,7 +20,9 @@ class SearchQuery(BaseModel):
 class MosaicProfileInfo(BaseModel):
     id: str
     name: str
-    location: str
+    breed: str
+    city: str
+    postal_code: str
     price: int
     photoId: str
 

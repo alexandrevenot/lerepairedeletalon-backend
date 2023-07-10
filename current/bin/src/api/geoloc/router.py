@@ -53,6 +53,15 @@ async def get_city(user_input: str):
                 lat=city['lat'],
                 lng=city['long']
                 ))
-        return schemas.GetCitiesRM(content=cities_to_return)
+        
+        if len(cities_to_return) == 0:
+            raise HTTPException(status_code=404, detail=f"city not found")
+        elif len(cities_to_return) > 10:
+            raise HTTPException(status_code=422, detail={
+                "message": "too many results",
+                "value": len(cities_to_return)
+            })
+        else:
+            return schemas.GetCitiesRM(content=cities_to_return)
     else:
         raise HTTPException(status_code=404, detail=f"city not found")
