@@ -39,6 +39,7 @@ async def search(
     distance: float = None, # km
     breeds: Annotated[list[str] | None, Query()] = None,
     colors: Annotated[list[str] | None, Query()] = None,
+    cover_types: Annotated[list[str] | None, Query()] = None
 
 ):
     if page <= 0:
@@ -78,6 +79,15 @@ async def search(
         query["location"] = {}
         query["location"]["$geoWithin"] = {}
         query["location"]["$geoWithin"]["$centerSphere"] = [[lng, lat], distance / 6371.0]
+    
+    # cover type
+    if cover_types is not None:
+        if price_query:
+            query["prices"]["$elemMatch"]["cover_type"] = {"$in": cover_types}
+        else:
+            query["prices"] = {}
+            query["prices"]["$elemMatch"] = {}
+            query["prices"]["$elemMatch"]["cover_type"] = {"$in": cover_types}
 
     cursor = stallions_c.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "postal_code": 1, "prices": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
 
