@@ -22,9 +22,10 @@ class MosaicProfileInfo(BaseModel):
     name: str
     breed: str
     city: str
-    postal_code: str
-    price: int
-    photoId: str
+    dep_name: str
+    reg_name: str
+    price: float
+    photo_id: str
 
 class SearchRM(BaseModel):
     content: list[MosaicProfileInfo]

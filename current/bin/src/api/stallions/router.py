@@ -10,6 +10,7 @@ from fastapi.responses import Response
 import src.api.stallions.utils as utils
 import src.api.stallions.schemas as schemas
 import src.api.auth.router as auth_router
+import src.api.geoloc.utils as geoloc_utils
 
 # global config
 global_config = utils.load_global_config()
@@ -32,8 +33,8 @@ router = APIRouter(prefix='/stallions')
 async def search(
     page: int,
     limit: int,
-    min_price: int = None,
-    max_price: int = None,
+    min_price: float = None,
+    max_price: float = None,
     lat: float = None,
     lng: float = None,
     distance: float = None, # km
@@ -89,7 +90,7 @@ async def search(
             query["prices"]["$elemMatch"] = {}
             query["prices"]["$elemMatch"]["cover_type"] = {"$in": cover_types}
 
-    cursor = stallions_c.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "postal_code": 1, "prices": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
+    cursor = stallions_c.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "prices": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
 
     mp_l = []
     for document in cursor:
@@ -98,9 +99,10 @@ async def search(
             name=document["name"],
             breed=document["breed"],
             city=document["city"],
-            postal_code=document["postal_code"],
-            price=min([elt["price"] for elt in document["prices"]]),
-            photoId=str(document["photos"][0])
+            dep_name=document["dep_name"],
+            reg_name=document["reg_name"],
+            price=utils.get_displayed_price(document, min_price, max_price),
+            photo_id=str(document["photos"][0])
         ))
     
     return schemas.SearchRM(content=mp_l)
@@ -121,13 +123,13 @@ async def get_stallion_profile(id: str, current_user = Depends(auth_router.get_c
     stallion = stallions_c.find_one(
         {"_id": ObjectId(id)},
         {
-            "_id": 0
+            "_id": 0,
+            "c_saillies": 0
         }
     )
     
     if stallion:
         stallion["owner"] = str(stallion["owner"])
-        stallion["c_saillies"] = str(stallion["c_saillies"])
         for i in range(len(stallion["photos"])):
             stallion["photos"][i] = str(stallion["photos"][i])
 
@@ -167,15 +169,17 @@ async def register_new_stallion(
     lng: Annotated[float, Form()],
     city: Annotated[str, Form()],
     postal_code: Annotated[str, Form()], 
-    offspring: Annotated[str, Form()],
-    performance: Annotated[str, Form()],
     pedigree: Annotated[str, Form()],
-    pedigree_po: Annotated[str, Form()],
-    stallion_additional_info: Annotated[str, Form()],
     # cover part
     cover_types: Annotated[str, Form()],
     prices: Annotated[str, Form()],
     cover_additional_info: Annotated[str, Form()],
+    # optionnal params
+    performance: Annotated[str, Form()] = "",
+    pedigree_po: Annotated[str, Form()] = "",
+    stallion_additional_info: Annotated[str, Form()] = "",
+    offspring: Annotated[str, Form()] = "",
+    # auth
     current_user = Depends(auth_router.get_current_user)
 ):
     # parameters parsing
@@ -219,6 +223,17 @@ async def register_new_stallion(
         "coordinates": [lng, lat]
     }
 
+    try:
+        result = geoloc_utils.find_dep_and_region(postal_code[:2])
+        if not result:
+            raise ValueError
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to browse french deps csv")
+    
+    dep_name = result["dep_name"]
+    reg_name = result["reg_name"]
+
     # add to db
     try:
         stallion_in_db = stallions_c.find_one({"n_sire": n_sire})
@@ -257,7 +272,9 @@ async def register_new_stallion(
                 "cover_additional_info": cover_additional_info,
                 "location": location,
                 "city": city,
-                "postal_code": postal_code
+                "postal_code": postal_code,
+                "dep_name": dep_name,
+                "reg_name": reg_name
             })
         except:
             print(traceback.format_exc())

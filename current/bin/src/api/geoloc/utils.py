@@ -30,3 +30,16 @@ def normalize(city_input):
 
 def find_city(city_input) -> list[pd.core.series.Series] | bool :
     return find_city_not_normalized(normalize(city_input))
+
+
+FRENCH_DEPS_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/french_deps.csv', sep=",")
+
+def find_dep_and_region(code):
+    index = bisect.bisect_left(FRENCH_DEPS_DF.loc[:,'code'], code)
+    if index and FRENCH_DEPS_DF.loc[index, 'code'] == code:
+        return {
+            "dep_name": FRENCH_DEPS_DF.loc[index,'dep'],
+            "reg_name": FRENCH_DEPS_DF.loc[index,'reg']
+        }
+    else:
+        return False
