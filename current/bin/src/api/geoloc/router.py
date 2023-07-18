@@ -1,5 +1,4 @@
 import traceback
-import re
 
 from fastapi import APIRouter, HTTPException
 
