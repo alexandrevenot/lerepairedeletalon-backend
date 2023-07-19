@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 import src.api.covers.utils as utils
 import src.api.covers.schemas as schemas
 import src.api.auth.router as auth_router
+import src.api.pricing.router as pricing_router
 
 # global config
 global_config = utils.load_global_config()
@@ -26,53 +27,75 @@ router = APIRouter(prefix='/covers')
 
 @router.post('/create-cover')
 async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_router.get_current_user)):
+    if cover.seller_id == current_user["_id"]:
+        raise HTTPException(status_code=400, detail="seller_id is equal to buyer_id")
+
     try:
         cover_in_db = covers_c.find_one({
             "stallion_nsire": cover.stallion_nsire,
             "mare_nsire": cover.mare_nsire
+        },
+        {
+            "status": 1
         })
     except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read covers collection")
     
-    if cover_in_db is not None:
-        raise HTTPException(status_code=400, detail="a cover already exists with this couple of nsire")
-    else:
-        try:
-            # building document
-            new_document = cover.dict()
+    if cover_in_db is not None and cover_in_db["status"] != config["status"][-1]:
+        raise HTTPException(status_code=400, detail="cover already exists")
+    
+    ## fetching price
+    try:
+        stallion_in_db = stallions_c.find_one(
+            {
+                "n_sire": cover.stallion_nsire
+            },{
+                "prices": 1
+            })
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read stallions collection")
+    
+    if stallion_in_db is None:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=404, detail="stallion does not exist in base")
 
-            ## adding date, and buyer_id
-            new_document.update({
-                "buyer_id": current_user["_id"],
-                "date": datetime.now()
-                })
-            
-            ## fetching stallion name
-            try:
-                stallion_in_db = stallions_c.find_one(
-                    {
-                        "n_sire": new_document["stallion_nsire"]
-                    },
-                    {
-                        "name": 1
-                    })
-            except:
-                print(traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to read stallions collection")
-            
-            try:
-                new_document.update({
-                    "stallion_name": stallion_in_db["name"]
-                })
-            except:
-                raise ValueError("The stallion does not exist in base")
+    # building document
+    ## calculting price
+    subtotal = None
+    for line in stallion_in_db["prices"]:
+        if line["cover_type"] == cover.cover_type:
+            subtotal = line["price"]
+    
+    if subtotal is None:
+        raise HTTPException(status_code=404, detail="cover type does not exist on stallion")
+    
+    price_response = await pricing_router.get_checkout(subtotal)
+    price = price_response.total
 
-            covers_c.insert_one(new_document)
-            return {"message": "cover registered successfully"}
-        except:
-            print(traceback.format_exc())
-            raise HTTPException(status_code=500, detail="failed to write covers collection")
+    new_document = cover.dict()
+
+    timestamps = {}
+    for step in config["status"]:
+        if step == config["status"][0]:
+            timestamps[step] = datetime.now()
+        else:
+            timestamps[step] = None
+
+    ## adding buyer_id, timestamps and price
+    new_document.update({
+        "buyer_id": current_user["_id"],
+        "timestamps": timestamps,
+        "price": price
+        })
+
+    try:
+        covers_c.insert_one(new_document)
+        return {"message": "cover registered successfully"}
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write covers collection")
 
 @router.put('/step-forward-cover')
 async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user = Depends(auth_router.get_current_user)):
@@ -85,15 +108,15 @@ async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user 
     if cover_in_db is None:
         raise HTTPException(status_code=404, detail="no cover exists with this id")
     else:
-        if (cover_in_db["status"] in ["offered", "purchased", "committed"] and current_user["_id"] != cover_in_db["seller_id"]) \
-            or (cover_in_db["status"] in ["approved", "declared_terminated"] and current_user["_id"] != cover_in_db["buyer_id"]):
+        if (cover_in_db["status"] in ["offered", "downpaid"] and current_user["_id"] != cover_in_db["seller_id"]) \
+            or (cover_in_db["status"] in ["approved"] and current_user["_id"] != cover_in_db["buyer_id"]):
             raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
         try:
             index = config["status"].index(cover_in_db["status"])
             new_value = config["status"][index + 1]
             update = {'$set': {'status': new_value}}
-            if new_value == "accepted": # remove message to sender from db when cover is accepted
+            if new_value == "approved": # remove message to sender from db when cover is approved
                 update['$unset'] = {'message': 1}
             covers_c.update_one({"_id": query.cover_id}, update)
         except:

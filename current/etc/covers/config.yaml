@@ -1,18 +1,14 @@
 status:
   - offered
   - approved
-  - purchased
-  - committed
-  - declared_terminated
-  - confirmed_terminated
+  - downpaid
+  - fullypaid
 
 groups:
   pending:
     - offered
     - approved
   onGoing:
-    - purchased
-    - committed
-    - declared_terminated
+    - downpaid
   done:
-    - confirmed_terminated
+    - fullypaid

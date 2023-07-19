@@ -13,8 +13,10 @@ class CoverQuery(BaseModel):
     stallion_nsire: str
     mare_nsire: str
     mare_name: str
-    status: str
+    mare_breed: str
     message: str
+    cover_type: str
+    status: str
 
     @validator('status')
     def status_validator(cls, v):
