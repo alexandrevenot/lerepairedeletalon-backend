@@ -37,6 +37,7 @@ async def register(user: schemas.RegisterQuery):
             firstname = user.firstname,
             lastname = user.lastname,
             email = user.email,
+            phone_number = user.phone_number,
             hashedpassword = utils.get_password_hash(user.password)
         )
 

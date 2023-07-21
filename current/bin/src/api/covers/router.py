@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException
 import src.api.covers.utils as utils
 import src.api.covers.schemas as schemas
 import src.api.auth.router as auth_router
-import src.api.pricing.router as pricing_router
+import src.api.pricing.utils as pricing_utils
 
 # global config
 global_config = utils.load_global_config()
 
 # config
 config = utils.load_config()
+pricing_config = pricing_utils.load_config()
 
 # db
 mongo_url = "mongodb://localhost:27017/"
@@ -51,7 +52,8 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
             {
                 "n_sire": cover.stallion_nsire
             },{
-                "prices": 1
+                "prices": 1,
+                "name": 1
             })
     except:
         print(traceback.format_exc())
@@ -70,9 +72,6 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
     
     if subtotal is None:
         raise HTTPException(status_code=404, detail="cover type does not exist on stallion")
-    
-    price_response = await pricing_router.get_checkout(subtotal)
-    price = price_response.total
 
     new_document = cover.dict()
 
@@ -86,8 +85,12 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
     ## adding buyer_id, timestamps and price
     new_document.update({
         "buyer_id": current_user["_id"],
+        "stallion_name": stallion_in_db["name"],
         "timestamps": timestamps,
-        "price": price
+        "subtotal": subtotal,
+        "buyer_fees": pricing_config["buyer_fees"],
+        "seller_fees": pricing_config["seller_fees"],
+        "TVA_coeff_HT": pricing_config["TVA_coeff_HT"]
         })
 
     try:
@@ -148,7 +151,8 @@ async def get_cover(group: str, point_of_view: str, current_user = Depends(auth_
                 "id": str(document["_id"]),
                 "stallion_name": document["stallion_name"],
                 "mare_name": document["mare_name"],
-                "status": document["status"]
+                "status": document["status"],
+                "income": pricing_utils.calculate_income(document["subtotal"], document["seller_fees"]).income
             })
         
         return schemas.GetCoverGroupRM(items=cover_items)

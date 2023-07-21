@@ -47,6 +47,7 @@ class GetCoverGroupItem(BaseModel):
     stallion_name: str
     mare_name: str
     status: str
+    income: float
 
 class GetCoverGroupRM(BaseModel):
     items: list[GetCoverGroupItem]
