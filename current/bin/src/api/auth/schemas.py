@@ -43,9 +43,14 @@ class UserInDB(BaseModel):
     firstname: str
     lastname: str
     email: str
+    phone_number: str
     hashedpassword: str
 
 class GetUserRM(BaseModel):
     firstname: str
     lastname: str
-    
+
+class GetUserInfoRM(BaseModel):
+    name: str
+    phone_number: str
+    email: str

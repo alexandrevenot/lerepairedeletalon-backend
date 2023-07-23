@@ -107,3 +107,19 @@ async def get_user(current_user = Depends(get_current_user)):
         firstname=current_user['firstname'],
         lastname=current_user['lastname']
     )
+
+async def get_user_info(id):
+    try:
+        user = users_c.find_one({"_id": id})
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read users collection")
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    
+    return schemas.GetUserInfoRM(
+        name=user["firstname"] + " " + user["lastname"],
+        phone_number=user["phone_number"],
+        email=user["email"]
+    )

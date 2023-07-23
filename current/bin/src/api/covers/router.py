@@ -1,4 +1,5 @@
 import traceback
+from bson.objectid import ObjectId
 from typing import Annotated
 from datetime import datetime
 
@@ -50,10 +51,11 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
     try:
         stallion_in_db = stallions_c.find_one(
             {
-                "n_sire": cover.stallion_nsire
+                "n_sire": cover.stallion_nsire,
             },{
                 "prices": 1,
-                "name": 1
+                "name": 1,
+                "breed": 1
             })
     except:
         print(traceback.format_exc())
@@ -86,11 +88,11 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
     new_document.update({
         "buyer_id": current_user["_id"],
         "stallion_name": stallion_in_db["name"],
+        "stallion_breed": stallion_in_db["breed"],
         "timestamps": timestamps,
         "subtotal": subtotal,
         "buyer_fees": pricing_config["buyer_fees"],
-        "seller_fees": pricing_config["seller_fees"],
-        "TVA_coeff_HT": pricing_config["TVA_coeff_HT"]
+        "seller_fees": pricing_config["seller_fees"]
         })
 
     try:
@@ -128,7 +130,7 @@ async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user 
         return {"message": "successfully step-forwarded cover"}
 
 @router.get('/get-cover-group', response_model=schemas.GetCoverGroupRM)
-async def get_cover(group: str, point_of_view: str, current_user = Depends(auth_router.get_current_user)):
+async def get_cover_group(group: str, point_of_view: str, current_user = Depends(auth_router.get_current_user)):
     # data validation
     if group not in config["groups"].keys():
         raise HTTPException(status_code=422, detail=f"group has to be in {list(config['groups'].keys())}")
@@ -147,15 +149,126 @@ async def get_cover(group: str, point_of_view: str, current_user = Depends(auth_
         cursor = covers_c.find(pattern).sort('date', -1)
         cover_items = []
         for document in cursor:
+            if point_of_view == "seller":
+                price = pricing_utils.calculate_income(document["subtotal"], document["seller_fees"], pricing_config["TVA_coeff_HT"]).total
+            else:
+                price = pricing_utils.calculate_checkout(document["subtotal"], document["buyer_fees"], pricing_config["TVA_coeff_HT"]).total
+
             cover_items.append({
                 "id": str(document["_id"]),
                 "stallion_name": document["stallion_name"],
                 "mare_name": document["mare_name"],
                 "status": document["status"],
-                "income": pricing_utils.calculate_income(document["subtotal"], document["seller_fees"]).income
+                "price": price
             })
         
         return schemas.GetCoverGroupRM(items=cover_items)
     except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read covers collection")
+
+@router.get('/get-cover-information', response_model=schemas.GetCoverInformation)
+async def get_cover_information(id: str, current_user = Depends(auth_router.get_current_user)):
+    try:
+        objectified_id = ObjectId(id)
+    except:
+        raise HTTPException(status_code=422, detail="Unprocessable id.")
+
+    cover = covers_c.find_one(
+        {"_id": objectified_id}
+    )
+    
+    if not cover:
+        raise HTTPException(status_code=404, detail="Cover not found.")
+    
+    if current_user['_id'] == cover["seller_id"]:
+        pov = "seller"
+    elif current_user['_id'] == cover["buyer_id"]:
+        pov = "buyer"
+    else:
+        raise HTTPException(status_code=401, detail="Only seller and buyer can get cover information.")
+
+    # notes
+    notes = {"buyer": "", "seller": ""}
+    if "notes" in cover:
+        notes = cover["notes"]
+    
+    # contact
+    user_info = await auth_router.get_user_info(cover[("seller" if pov == "buyer" else "buyer") + "_id"])
+
+    if pov == "buyer" and cover["status"] == "offered":
+        contact_name = ""
+        contact_phone_number = ""
+        contact_email = ""
+    else:
+        contact_name = user_info.name
+        contact_phone_number = user_info.phone_number
+        contact_email = user_info.email
+
+    # price
+    if pov == "seller":
+        price = pricing_utils.calculate_income(cover["subtotal"], cover["seller_fees"], pricing_config["TVA_coeff_HT"]).total
+    else:
+        price = pricing_utils.calculate_checkout(cover["subtotal"], cover["buyer_fees"], pricing_config["TVA_coeff_HT"]).total
+
+    # timestamps
+    timestamps_src = cover["timestamps"]
+    timestamps = {}
+
+    for key, value in timestamps_src.items():
+        if value is None:
+            timestamps[key] = "-"
+        else:
+            timestamps[key] = value.strftime("Le %d/%m/%Y à %H:%M:%S")
+
+
+    return schemas.GetCoverInformation(
+        stallion_name=cover["stallion_name"],
+        stallion_breed=cover["stallion_breed"],
+        stallion_nsire=cover["stallion_nsire"],
+        mare_name=cover["mare_name"],
+        mare_breed=cover["mare_breed"],
+        mare_nsire=cover["mare_nsire"],
+        cover_type=cover["cover_type"],
+        status=cover["status"],
+        price=price,
+        buyer_message=cover["message"],
+        timestamps=timestamps,
+        notes=notes[pov],
+        contact_name=contact_name,
+        contact_phone_number=contact_phone_number,
+        contact_email=contact_email
+    )
+
+@router.put('/update-notes')
+async def update_notes(query: schemas.UpdateNotesQuery, current_user = Depends(auth_router.get_current_user)):
+    try:
+        cover = covers_c.find_one({"_id": query.cover_id})
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read covers collection")
+
+    if not cover:
+        raise HTTPException(status_code=404, detail="cover not found.")
+    
+    if current_user['_id'] == cover["seller_id"]:
+        pov = "seller"
+    elif current_user['_id'] == cover["buyer_id"]:
+        pov = "buyer"
+    else:
+        raise HTTPException(status_code=401, detail="only seller and buyer can edit notes.")
+    
+    try:
+        covers_c.update_one(
+            {"_id": query.cover_id},
+            {
+                "$set": {
+                    f"notes.{pov}": query.notes
+                }
+            }
+        )
+
+        return {"message": "updated notes successfully"}
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write covers collection")

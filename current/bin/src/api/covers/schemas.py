@@ -47,7 +47,35 @@ class GetCoverGroupItem(BaseModel):
     stallion_name: str
     mare_name: str
     status: str
-    income: float
+    price: float
 
 class GetCoverGroupRM(BaseModel):
     items: list[GetCoverGroupItem]
+
+class GetCoverInformation(BaseModel):
+    stallion_name: str
+    stallion_breed: str
+    stallion_nsire: str
+    mare_name: str
+    mare_breed: str
+    mare_nsire: str
+    contact_name: str
+    contact_phone_number: str
+    contact_email: str
+    cover_type: str
+    price: float
+    buyer_message: str
+    timestamps: dict
+    notes: str
+    status: str
+
+class UpdateNotesQuery(BaseModel):
+    cover_id: str
+    notes: str
+
+    @validator('cover_id')
+    def cover_id_validator(cls, v):
+        try:
+            return ObjectId(v)
+        except:
+            raise HTTPException(status_code=422, detail=f"cover_id is not readable")

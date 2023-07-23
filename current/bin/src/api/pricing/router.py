@@ -14,7 +14,7 @@ config = utils.load_config()
 # routes
 router = APIRouter(prefix='/pricing')
 
-@router.get('/get-checkout', response_model=schemas.Checkout)
+@router.get('/get-checkout', response_model=schemas.PriceWithFees)
 async def get_checkout(subtotal: float):
     buyer_fees = config['buyer_fees']
     TVA_coeff_HT = config["TVA_coeff_HT"]

@@ -116,7 +116,7 @@ async def get_stallion_photo(id: str):
         image_content_type = photo["content_type"]
         return Response(content=image_data, media_type=image_content_type)
     else:
-        return HTTPException(status_code=404, detail="Image not found.")
+        raise HTTPException(status_code=404, detail="Image not found.")
 
 @router.get('/get-stallion-profile-information')
 async def get_stallion_profile(id: str, current_user = Depends(auth_router.get_current_user)):
@@ -135,7 +135,7 @@ async def get_stallion_profile(id: str, current_user = Depends(auth_router.get_c
 
         return {"stallionProfile": stallion}
     else:
-        return HTTPException(status_code=404, detail="Stallion not found.")
+        raise HTTPException(status_code=404, detail="Stallion not found.")
 
 @router.get('/get-my-stallions', response_model=schemas.GetMyStallionsRM)
 async def get_my_stallions(current_user = Depends(auth_router.get_current_user)):

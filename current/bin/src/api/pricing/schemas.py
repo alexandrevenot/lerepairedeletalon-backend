@@ -1,10 +1,6 @@
 from pydantic import BaseModel
 
-class Checkout(BaseModel):
+class PriceWithFees(BaseModel):
     subtotal: float
-    service_fees_ht: float
-    service_fees_taxes: float
+    service_fees: int
     total: float
-
-class Income(BaseModel):
-    income: float
