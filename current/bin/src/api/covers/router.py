@@ -92,7 +92,11 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
         "timestamps": timestamps,
         "subtotal": subtotal,
         "buyer_fees": pricing_config["buyer_fees"],
-        "seller_fees": pricing_config["seller_fees"]
+        "seller_fees": pricing_config["seller_fees"],
+        "notes" : {
+            "seller": "",
+            "buyer": ""
+        }
         })
 
     try:
@@ -112,22 +116,31 @@ async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user 
     
     if cover_in_db is None:
         raise HTTPException(status_code=404, detail="no cover exists with this id")
-    else:
-        if (cover_in_db["status"] in ["offered", "downpaid"] and current_user["_id"] != cover_in_db["seller_id"]) \
-            or (cover_in_db["status"] in ["approved"] and current_user["_id"] != cover_in_db["buyer_id"]):
-            raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
-        try:
+    if current_user["_id"] not in [cover_in_db["seller_id"], cover_in_db["buyer_id"]]:
+        raise HTTPException(status_code=401, detail="only seller or buyer can step this cover forward")
+
+    if (cover_in_db["status"] in ["offered", "downpaid"] and current_user["_id"] != cover_in_db["seller_id"]) \
+        or (cover_in_db["status"] in ["approved"] and current_user["_id"] != cover_in_db["buyer_id"]):
+        raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
+
+    try:
+        if cover_in_db["status"] == "offered" and query.refuse:
+            covers_c.delete_one({"_id": query.cover_id})
+        else:
             index = config["status"].index(cover_in_db["status"])
             new_value = config["status"][index + 1]
-            update = {'$set': {'status': new_value}}
-            if new_value == "approved": # remove message to sender from db when cover is approved
-                update['$unset'] = {'message': 1}
+            update = {
+                '$set': {
+                    'status': new_value,
+                    'timestamps' + '.' + new_value: datetime.now()
+                    }
+                }
             covers_c.update_one({"_id": query.cover_id}, update)
-        except:
-            raise HTTPException(status_code=422, detail="unable to step cover forward")
-        
-        return {"message": "successfully step-forwarded cover"}
+    except:
+        raise HTTPException(status_code=422, detail="unable to step cover forward")
+    
+    return {"message": "successfully step-forwarded cover"}
 
 @router.get('/get-cover-group', response_model=schemas.GetCoverGroupRM)
 async def get_cover_group(group: str, point_of_view: str, current_user = Depends(auth_router.get_current_user)):
@@ -187,17 +200,12 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
         pov = "buyer"
     else:
         raise HTTPException(status_code=401, detail="Only seller and buyer can get cover information.")
-
-    # notes
-    notes = {"buyer": "", "seller": ""}
-    if "notes" in cover:
-        notes = cover["notes"]
     
     # contact
     user_info = await auth_router.get_user_info(cover[("seller" if pov == "buyer" else "buyer") + "_id"])
 
     if pov == "buyer" and cover["status"] == "offered":
-        contact_name = ""
+        contact_name = user_info.name
         contact_phone_number = ""
         contact_email = ""
     else:
@@ -234,10 +242,11 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
         price=price,
         buyer_message=cover["message"],
         timestamps=timestamps,
-        notes=notes[pov],
+        notes=cover["notes"][pov],
         contact_name=contact_name,
         contact_phone_number=contact_phone_number,
-        contact_email=contact_email
+        contact_email=contact_email,
+        pov=pov
     )
 
 @router.put('/update-notes')

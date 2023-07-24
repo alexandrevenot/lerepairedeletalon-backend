@@ -34,6 +34,7 @@ class CoverQuery(BaseModel):
 
 class StepForwardCoverQuery(BaseModel):
     cover_id: str
+    refuse: bool = False
 
     @validator('cover_id')
     def cover_id_validator(cls, v):
@@ -68,6 +69,7 @@ class GetCoverInformation(BaseModel):
     timestamps: dict
     notes: str
     status: str
+    pov: str
 
 class UpdateNotesQuery(BaseModel):
     cover_id: str
