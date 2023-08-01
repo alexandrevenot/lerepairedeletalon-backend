@@ -3,8 +3,7 @@ photo_max_size: 4000000 #4Mo
 
 cover_types:
   - lib
+  - hand
   - iai
   - iarp
   - iac
-  - iate
-  - icsi

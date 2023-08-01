@@ -210,7 +210,7 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
         contact_phone_number = ""
         contact_email = ""
     else:
-        contact_name = user_info["name"]
+        contact_name = user_info["firstname"] + " " + user_info["lastname"]
         contact_phone_number = user_info["phone_number"]
         contact_email = user_info["email"]
 

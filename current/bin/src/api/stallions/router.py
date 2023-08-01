@@ -172,6 +172,7 @@ async def register_new_stallion(
     pedigree: Annotated[str, Form()],
     # cover part
     cover_types: Annotated[str, Form()],
+    cover_places: Annotated[str, Form()],
     prices: Annotated[str, Form()],
     cover_additional_info: Annotated[str, Form()],
     # optionnal params
@@ -201,11 +202,12 @@ async def register_new_stallion(
         photos_f.append(p)
     
     cover_types_list = cover_types.split(',')
+    cover_places_list = cover_places.split(',')
     processed_prices = []
     prices_list = prices.split(',')
-    for cover_type, price in zip(cover_types_list, prices_list):
+    for cover_type, cover_place, price in zip(cover_types_list, cover_places_list, prices_list):
         if cover_type in config["cover_types"]:
-            processed_prices.append({"cover_type": cover_type, "price": float(price)})
+            processed_prices.append({"cover_type": cover_type, "cover_place": cover_place ,"price": float(price)})
         else:
             raise HTTPException(status_code=422, detail=f"unknown cover type '{cover_type}'")
 
