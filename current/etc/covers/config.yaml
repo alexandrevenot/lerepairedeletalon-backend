@@ -1,6 +1,8 @@
 status:
   - offered
   - approved
+  - buyersigned
+  - sellersigned
   - downpaid
   - fullypaid
 
@@ -8,6 +10,8 @@ groups:
   pending:
     - offered
     - approved
+    - buyersigned
+    - sellersigned
   onGoing:
     - downpaid
   done:

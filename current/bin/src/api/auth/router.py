@@ -118,8 +118,4 @@ async def get_user_info(id):
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
     
-    return schemas.GetUserInfoRM(
-        name=user["firstname"] + " " + user["lastname"],
-        phone_number=user["phone_number"],
-        email=user["email"]
-    )
+    return user

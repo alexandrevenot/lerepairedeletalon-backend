@@ -1,1 +1,2 @@
 db_to_use: test
+send_demo_contracts: true

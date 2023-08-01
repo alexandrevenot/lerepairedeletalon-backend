@@ -24,6 +24,7 @@ client = MongoClient(mongo_url)
 db = getattr(client, global_config['db_to_use'])
 covers_c = db.covers
 stallions_c = db.stallions
+
 # routes
 router = APIRouter(prefix='/covers')
 
@@ -120,8 +121,8 @@ async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user 
     if current_user["_id"] not in [cover_in_db["seller_id"], cover_in_db["buyer_id"]]:
         raise HTTPException(status_code=401, detail="only seller or buyer can step this cover forward")
 
-    if (cover_in_db["status"] in ["offered", "downpaid"] and current_user["_id"] != cover_in_db["seller_id"]) \
-        or (cover_in_db["status"] in ["approved"] and current_user["_id"] != cover_in_db["buyer_id"]):
+    if (cover_in_db["status"] in ["offered", "downpaid", "buyersigned"] and current_user["_id"] != cover_in_db["seller_id"]) \
+        or (cover_in_db["status"] in ["approved", "sellersigned"] and current_user["_id"] != cover_in_db["buyer_id"]):
         raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
     try:
@@ -205,13 +206,13 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
     user_info = await auth_router.get_user_info(cover[("seller" if pov == "buyer" else "buyer") + "_id"])
 
     if pov == "buyer" and cover["status"] == "offered":
-        contact_name = user_info.name
+        contact_name = user_info["firstname"] + " " + user_info["lastname"]
         contact_phone_number = ""
         contact_email = ""
     else:
-        contact_name = user_info.name
-        contact_phone_number = user_info.phone_number
-        contact_email = user_info.email
+        contact_name = user_info["name"]
+        contact_phone_number = user_info["phone_number"]
+        contact_email = user_info["email"]
 
     # price
     if pov == "seller":

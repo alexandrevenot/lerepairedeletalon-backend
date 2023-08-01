@@ -49,8 +49,3 @@ class UserInDB(BaseModel):
 class GetUserRM(BaseModel):
     firstname: str
     lastname: str
-
-class GetUserInfoRM(BaseModel):
-    name: str
-    phone_number: str
-    email: str
