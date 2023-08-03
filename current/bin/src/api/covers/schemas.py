@@ -64,6 +64,7 @@ class GetCoverInformation(BaseModel):
     contact_phone_number: str
     contact_email: str
     cover_type: str
+    cover_place: str
     price: float
     buyer_message: str
     timestamps: dict

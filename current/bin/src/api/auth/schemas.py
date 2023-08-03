@@ -1,7 +1,7 @@
 import re
 
 from fastapi import HTTPException
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, root_validator
 
 email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
 
@@ -49,3 +49,39 @@ class UserInDB(BaseModel):
 class GetUserRM(BaseModel):
     firstname: str
     lastname: str
+
+class GetProfileInformation(BaseModel):
+    type: str
+    gender: str
+    postal_address: str
+    birthdate: str
+    birthplace: str
+    citizenship: str
+    company_name: str = None
+    company_status: str = None
+    head_office_address: str = None
+    siret: str = None
+
+class PutProfileInformationQuery(BaseModel):
+    type: str
+    company_name: str = None
+    company_status: str = None
+    head_office_address: str = None
+    siret: str = None
+    gender: str
+    postal_address: str
+    birthdate: str
+    birthplace: str
+    citizenship: str
+
+    @root_validator()
+    def validate_atts(cls, values):
+        if values.get("type") == "company":
+            for field in ["company_name", "company_status", "head_office_address", "siret"]:
+                if values.get(field) is None:
+                    raise HTTPException(status_code=422, detail="missing mandatory fields")
+        
+        elif values.get("type") != "individual":
+            raise HTTPException(status_code=422, detail="type has to be either 'individual' or 'company'")
+        
+        return values

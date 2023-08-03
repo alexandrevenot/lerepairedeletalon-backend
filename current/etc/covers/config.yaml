@@ -7,9 +7,10 @@ status:
   - fullypaid
 
 groups:
-  pending:
+  pendingApproval:
     - offered
     - approved
+  pendingSignature:
     - buyersigned
     - sellersigned
   onGoing:

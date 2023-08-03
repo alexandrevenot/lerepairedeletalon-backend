@@ -119,3 +119,75 @@ async def get_user_info(id):
         raise HTTPException(status_code=404, detail="user not found")
     
     return user
+
+@router.get('/profile-information', response_model=schemas.GetProfileInformation)
+async def get_profile_information(current_user = Depends(get_current_user)):
+    try:
+        user = users_c.find_one({"_id": current_user["_id"]})
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read users collection")
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    
+    try:
+        return schemas.GetProfileInformation(
+            type=user["contract-identity"]["type"],
+            company_name=user["contract-identity"]['company_name'],
+            company_status=user["contract-identity"]['company_status'],
+            head_office_address=user["contract-identity"]['head_office_address'],
+            siret=user["contract-identity"]['siret'],
+            postal_address=user["contract-identity"]['postal_address'],
+            birthdate=user["contract-identity"]['birthdate'],
+            birthplace=user["contract-identity"]['birthplace'],
+            citizenship=user["contract-identity"]['citizenship'],
+            gender=user["contract-identity"]['gender']
+        )
+
+    except:
+        try:
+            return schemas.GetProfileInformation(
+                type=user["contract-identity"]["type"],
+                postal_address=user["contract-identity"]['postal_address'],
+                birthdate=user["contract-identity"]['birthdate'],
+                birthplace=user["contract-identity"]['birthplace'],
+                citizenship=user["contract-identity"]['citizenship'],
+                gender=user["contract-identity"]['gender']
+            )
+        except:
+            raise HTTPException(status_code=404, detail="profile information not found")
+
+@router.put('/profile-information')
+async def put_profile_information(query: schemas.PutProfileInformationQuery, current_user = Depends(get_current_user)):
+    try:
+        user = users_c.find_one({"_id": current_user["_id"]})
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read users collection")
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    
+    try:
+        update = {
+                '$set': {
+                    'contract-identity': {
+                    }
+                }
+            }
+
+        if query.type == "company":
+            for field in ["type","company_name", "company_status", "head_office_address", "siret"]:
+                update["$set"]["contract-identity"][field] = getattr(query, field)
+        else:
+            update["$set"]["contract-identity"]["type"] = query.type
+
+        for field in ["gender", "postal_address", "birthdate", "birthplace", "citizenship"]:
+            update["$set"]["contract-identity"][field] = getattr(query, field)
+        
+        users_c.update_one({"_id": current_user["_id"]}, update)
+
+        return {"message": "successfully put profile information"}
+    except:
+        raise HTTPException(status_code=500, detail="unable to put profile information")

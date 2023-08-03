@@ -72,6 +72,7 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
     for line in stallion_in_db["prices"]:
         if line["cover_type"] == cover.cover_type:
             subtotal = line["price"]
+            cover_place = line["cover_place"]
     
     if subtotal is None:
         raise HTTPException(status_code=404, detail="cover type does not exist on stallion")
@@ -91,6 +92,7 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
         "stallion_name": stallion_in_db["name"],
         "stallion_breed": stallion_in_db["breed"],
         "timestamps": timestamps,
+        "cover_place": cover_place,
         "subtotal": subtotal,
         "buyer_fees": pricing_config["buyer_fees"],
         "seller_fees": pricing_config["seller_fees"],
@@ -239,6 +241,7 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
         mare_breed=cover["mare_breed"],
         mare_nsire=cover["mare_nsire"],
         cover_type=cover["cover_type"],
+        cover_place=cover["cover_place"],
         status=cover["status"],
         price=price,
         buyer_message=cover["message"],
