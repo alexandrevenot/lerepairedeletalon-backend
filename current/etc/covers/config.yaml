@@ -1,6 +1,7 @@
 status:
   - offered
   - approved
+  - signingstarted
   - buyersigned
   - sellersigned
   - downpaid
@@ -11,6 +12,7 @@ groups:
     - offered
     - approved
   pendingSignature:
+    - signingstarted
     - buyersigned
     - sellersigned
   onGoing:

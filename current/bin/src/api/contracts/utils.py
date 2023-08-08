@@ -16,16 +16,25 @@ def load_config() -> dict:
 def build_company_identification_field(
     company_name: str,
     company_status: str,
-    capital: str,
+    capital: float,
     head_office_address: str,
     siret: str,
-    representative_gender: str,
-    representative_firstname: str,
-    representative_lastname: str
+    gender: str,
+    firstname: str,
+    lastname: str,
+    postal_address: str,
+    birthdate: str,
+    birthplace: str,
+    citizenship: str
+    
 ):
-    res = f"La société {company_name}, {company_status} au capital de {capital}, donc le siège social est au {head_office_address}, "
-    res += f"immatriculée au registre du commerce et des sociétés de la chambre de commerce et d'industrie de Paris, sous le numéro de SIRET {siret}, "
-    res += f"représentée par {'Monsieur' if gender == 'male' else 'Madame'} {firstname} {lastname.upper()}"
+    res = f"La société {company_name}, {company_status} au capital de {capital}€, donc le siège social est au {head_office_address}, "
+    res += f"immatriculée au registre du commerce et des sociétés de la chambre de commerce et d'industrie de Paris sous le numéro de SIRET {siret}, "
+    res += f"représentée par {gender} {firstname} {lastname.upper()}, "
+    res += f"demeurant au {postal_address}, "
+    res += f"né{'' if gender == 'Monsieur' else 'e'} le {birthdate}, "
+    res += f"à {birthplace}, "
+    res += f"de nationalité {citizenship}"
     return res
 
 def build_person_identification_field(
@@ -37,22 +46,21 @@ def build_person_identification_field(
     birthplace: str,
     citizenship: str
 ):
-    res = f"{'Monsieur' if gender == 'male' else 'Madame'} {firstname} {lastname.upper()}, "
-    res += f"Demeurant au {postal_address}, "
-    res += f"Né{'' if gender == 'male' else 'e'} le {birthdate}, "
-    res += f"À {birthplace}, "
-    res += f"De nationalité {citizenship}"
+    res = f"{gender} {firstname} {lastname.upper()}, "
+    res += f"demeurant au {postal_address}, "
+    res += f"né{'' if gender == 'Monsieur' else 'e'} le {birthdate}, "
+    res += f"à {birthplace}, "
+    res += f"de nationalité {citizenship}"
     return res
 
 def build_last_payment_cases():
-    res = "La jument, à l'issue de la saillie dont ce contrat fait l'objet, obtient un poulain, et ce poulain a passé le seuil des 48h en vie. "
+    res = "- La jument, à l'issue de la saillie dont ce contrat fait l'objet, obtient un poulain, et ce poulain a passé le seuil des 48h en vie. "
     res += "Dans ce cas, la seconde fraction devra être payée dans le délai d'un mois après les 48h du poulain.\n"
-    res += "La jument a été vendue entre le payment de la première fraction et celui de la seconde. Dans ce cas, la seconde fraction doit être payée dans le délai d'un mois suivant l'acte de vente.\n"
+    res += "- La jument a été vendue entre le paiement de la première fraction et celui de la seconde. Dans ce cas, la seconde fraction doit être payée dans le délai d'un mois suivant l'acte de vente.\n"
     return res
 
-def build_use_conditions(insemination_center: str):
-    res = f"La jument sera inséminée dans le centre d'insémination agréé {insemination_center}"
-    res += "Le prix de la saillie inclut le prix de fabrication des doses, ainsi que leur acheminement dans le centre d'insémination.\n"
+def build_use_conditions():
+    res = "Le prix de la saillie inclut le prix de fabrication des doses, ainsi que leur acheminement dans le centre d'insémination.\n"
     res += "Les doses seront envoyées au centre d'insémination sur demande.\n"
     res += "L'acheteur atteste avoir connaissance des conditions dans lesquelles se déroulent les inséminations, ainsi que les risques associés.\n"
     res += "Tous les frais générés par la saillie autres que la fabrication des doses et leur acheminement sont à la charge de l'Acheteur.\n"
@@ -74,7 +82,7 @@ async def create_and_send_contract(
     signers = []
 
     buyer_signer_dict = {}
-    buyer_signer_dict["name"] = f"{buyer_document['firstname']} {buyer_document['firstname'].upper()}"
+    buyer_signer_dict["name"] = f"{buyer_document['firstname']} {buyer_document['lastname'].upper()}"
     buyer_signer_dict["email"] = buyer_document["email"]
     buyer_signer_dict["mobile"] = buyer_document["phone_number"]
     if "company_name" in buyer_document:
@@ -83,11 +91,11 @@ async def create_and_send_contract(
     buyer_signer_dict["signature_request_delivery_method"] = signature_request_delivery_method
     buyer_signer_dict["signed_document_delivery_method"] = signed_document_delivery_method
     buyer_signer_dict["required_identification_methods"] = required_identification_methods
-    #buyer_signer_dict["redirect_url"] = redirect_url
+    buyer_signer_dict["redirect_url"] = f"http://localhost:4200/dashboard?coverId={str(cover_document['_id'])}"
     signers.append(buyer_signer_dict)
 
     seller_signer_dict = {}
-    seller_signer_dict["name"] = f"{seller_document['firstname']} {seller_document['firstname'].upper()}"
+    seller_signer_dict["name"] = f"{seller_document['firstname']} {seller_document['lastname'].upper()}"
     seller_signer_dict["email"] = seller_document["email"]
     seller_signer_dict["mobile"] = seller_document["phone_number"]
     if "company_name" in seller_document:
@@ -96,70 +104,93 @@ async def create_and_send_contract(
     seller_signer_dict["signature_request_delivery_method"] = signature_request_delivery_method
     seller_signer_dict["signed_document_delivery_method"] = signed_document_delivery_method
     seller_signer_dict["required_identification_methods"] = required_identification_methods
-    #seller_signer_dict["redirect_url"] = redirect_url
+    seller_signer_dict["redirect_url"] = f"http://localhost:4200/dashboard?coverId={str(cover_document['_id'])}"
     signers.append(seller_signer_dict)
 
     placeholder_fields = []
     placeholder_fields.append({
         "api_key": "seller_identification",
         "value": build_company_identification_field(
-            seller_document["company_name"],
-            seller_document["company_status"],
-            seller_document["capital"],
-            seller_document["head_office_address"],
-            seller_document["siret"],
-            seller_document["representative_gender"],
-            seller_document["representative_firstname"],
-            seller_document["representative_lastname"]
+            seller_document["contract-identity"]["company_name"],
+            seller_document["contract-identity"]["company_status"],
+            seller_document["contract-identity"]["capital"],
+            seller_document["contract-identity"]["head_office_address"],
+            seller_document["contract-identity"]["siret"],
+            seller_document["contract-identity"]["gender"],
+            seller_document["firstname"],
+            seller_document["lastname"],
+            seller_document["contract-identity"]["postal_address"],
+            seller_document["contract-identity"]["birthdate"],
+            seller_document["contract-identity"]["birthplace"],
+            seller_document["contract-identity"]["citizenship"]
         )
     })
     
-    if buyer_document["status"] == "company":
+    if buyer_document["contract-identity"]["type"] == "individual":
         placeholder_fields.append({
             "api_key": "buyer_identification",
             "value": build_person_identification_field(
-                buyer_document["gender"],
+                buyer_document["contract-identity"]["gender"],
                 buyer_document["firstname"],
                 buyer_document["lastname"],
-                buyer_document["postal_address"],
-                buyer_document["birthdate"],
-                buyer_document["birthplace"],
-                buyer_document["citizenship"]
+                buyer_document["contract-identity"]["postal_address"],
+                buyer_document["contract-identity"]["birthdate"],
+                buyer_document["contract-identity"]["birthplace"],
+                buyer_document["contract-identity"]["citizenship"]
             )
         })
-    elif buyer_document["status"] == "individual":
+    elif buyer_document["contract-identity"]["type"] == "company":
         placeholder_fields.append({
             "api_key": "buyer_identification",
             "value": build_company_identification_field(
-                buyer_document["company_name"],
-                buyer_document["company_status"],
-                buyer_document["capital"],
-                buyer_document["head_office_address"],
-                buyer_document["siret"],
-                buyer_document["representative_gender"],
-                buyer_document["representative_firstname"],
-                buyer_document["representative_lastname"]
+                buyer_document["contract-identity"]["company_name"],
+                buyer_document["contract-identity"]["company_status"],
+                buyer_document["contract-identity"]["capital"],
+                buyer_document["contract-identity"]["head_office_address"],
+                buyer_document["contract-identity"]["siret"],
+                buyer_document["contract-identity"]["gender"],
+                buyer_document["firstname"],
+                buyer_document["lastname"],
+                buyer_document["contract-identity"]["postal_address"],
+                buyer_document["contract-identity"]["birthdate"],
+                buyer_document["contract-identity"]["birthplace"],
+                buyer_document["contract-identity"]["citizenship"]
             )
         })
     
-    for field in ["stallion_name", "stallion_breed", "mare_name", "mare_breed"]:
+    for field in ["stallion_name", "stallion_breed", "mare_name", "mare_breed", "stallion_nsire", "mare_nsire"]:
         placeholder_fields.append({
             "api_key": field,
             "value": cover_document[field]
         })
     
-    half_payment_value = pricing_utils.calculate_checkout(
-        cover_document["subtotal"],
+    placeholder_fields.append({
+        "api_key": "cover_place",
+        "value": cover_document["cover_place"]
+    })
+
+    advance = pricing_utils.calculate_checkout(
+        cover_document["advance"],
         cover_document["buyer_fees"],
         pricing_config["TVA_coeff_HT"]
-    ).subtotal / 2
+    ).total
 
-    for field in ["down_payment", "last_payment"]:
-        placeholder_fields.append({
-            "api_key": field,
-            "value": half_payment_value
-        })
+    balance = pricing_utils.calculate_checkout(
+        cover_document["balance"],
+        cover_document["buyer_fees"],
+        pricing_config["TVA_coeff_HT"]
+    ).total
+
+    placeholder_fields.append({
+        "api_key": "down_payment",
+        "value": advance
+    })
     
+    placeholder_fields.append({
+        "api_key": "last_payment",
+        "value": balance
+    })
+
     placeholder_fields.append({
         "api_key": "last_payment_validity_cases",
         "value": build_last_payment_cases()
@@ -167,7 +198,7 @@ async def create_and_send_contract(
 
     placeholder_fields.append({
         "api_key": "use_conditions",
-        "value": build_use_conditions(cover_document["insemination_center"])
+        "value": build_use_conditions()
     })
 
     data = {

@@ -136,6 +136,7 @@ async def get_profile_information(current_user = Depends(get_current_user)):
             type=user["contract-identity"]["type"],
             company_name=user["contract-identity"]['company_name'],
             company_status=user["contract-identity"]['company_status'],
+            capital=user["contract-identity"]["capital"],
             head_office_address=user["contract-identity"]['head_office_address'],
             siret=user["contract-identity"]['siret'],
             postal_address=user["contract-identity"]['postal_address'],
@@ -178,7 +179,7 @@ async def put_profile_information(query: schemas.PutProfileInformationQuery, cur
             }
 
         if query.type == "company":
-            for field in ["type","company_name", "company_status", "head_office_address", "siret"]:
+            for field in ["type","company_name", "company_status", "capital", "head_office_address", "siret"]:
                 update["$set"]["contract-identity"][field] = getattr(query, field)
         else:
             update["$set"]["contract-identity"]["type"] = query.type

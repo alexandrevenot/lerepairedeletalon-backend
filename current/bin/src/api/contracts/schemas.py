@@ -12,3 +12,6 @@ class SignContract(BaseModel):
             return ObjectId(v)
         except:
             raise HTTPException(status_code=422, detail=f"cover_id is not readable")
+
+class GetSignPageUrl(BaseModel):
+    url: str

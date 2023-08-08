@@ -1,15 +1,18 @@
 import traceback
+import base64
 from bson.objectid import ObjectId
 from typing import Annotated
 from datetime import datetime
 
 from pymongo import MongoClient
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 
 import src.api.covers.utils as utils
 import src.api.covers.schemas as schemas
 import src.api.auth.router as auth_router
 import src.api.pricing.utils as pricing_utils
+import src.api.pricing.schemas as pricing_schemas
+import src.api.contracts.utils as contracts_utils
 
 # global config
 global_config = utils.load_global_config()
@@ -17,6 +20,7 @@ global_config = utils.load_global_config()
 # config
 config = utils.load_config()
 pricing_config = pricing_utils.load_config()
+contracts_config = contracts_utils.load_config()
 
 # db
 mongo_url = "mongodb://localhost:27017/"
@@ -77,6 +81,18 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
     if subtotal is None:
         raise HTTPException(status_code=404, detail="cover type does not exist on stallion")
 
+    if cover_place == "":
+        if cover.offered_cover_place == "":
+            raise HTTPException(status_code=422, detail="a cover place has to be offered")
+        else:
+            cover_place = cover.offered_cover_place
+            cover_place_is_offered = True
+    else:
+        if cover.offered_cover_place == "":
+            cover_place_is_offered = False
+        else:
+            raise HTTPException(status_code=422, detail="cover place imposed on this cover")
+
     new_document = cover.dict()
 
     timestamps = {}
@@ -93,7 +109,9 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
         "stallion_breed": stallion_in_db["breed"],
         "timestamps": timestamps,
         "cover_place": cover_place,
-        "subtotal": subtotal,
+        "cover_place_is_offered": cover_place_is_offered,
+        "advance": pricing_utils.calculate_advance(subtotal, pricing_config["advance_coeff"]),
+        "balance": pricing_utils.calculate_balance(subtotal, pricing_config["advance_coeff"]),
         "buyer_fees": pricing_config["buyer_fees"],
         "seller_fees": pricing_config["seller_fees"],
         "notes" : {
@@ -109,7 +127,7 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(auth_ro
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write covers collection")
 
-@router.put('/step-forward-cover')
+@router.put('/step-forward-cover') # manually only, does not apply to signing or paying
 async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user = Depends(auth_router.get_current_user)):
     try:
         cover_in_db = covers_c.find_one({"_id": query.cover_id})
@@ -122,24 +140,24 @@ async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user 
 
     if current_user["_id"] not in [cover_in_db["seller_id"], cover_in_db["buyer_id"]]:
         raise HTTPException(status_code=401, detail="only seller or buyer can step this cover forward")
+    
+    if cover_in_db["status"] not in ["offered", "approved"]:
+        raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
-    if (cover_in_db["status"] in ["offered", "downpaid", "buyersigned"] and current_user["_id"] != cover_in_db["seller_id"]) \
-        or (cover_in_db["status"] in ["approved", "sellersigned"] and current_user["_id"] != cover_in_db["buyer_id"]):
+    if (cover_in_db["status"] in ["offered"] and current_user["_id"] != cover_in_db["seller_id"]) \
+        or (cover_in_db["status"] in ["approved"] and current_user["_id"] != cover_in_db["buyer_id"]):
         raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
     try:
-        if cover_in_db["status"] == "offered" and query.refuse:
-            covers_c.delete_one({"_id": query.cover_id})
-        else:
-            index = config["status"].index(cover_in_db["status"])
-            new_value = config["status"][index + 1]
-            update = {
-                '$set': {
-                    'status': new_value,
-                    'timestamps' + '.' + new_value: datetime.now()
-                    }
+        index = config["status"].index(cover_in_db["status"])
+        new_value = config["status"][index + 1]
+        update = {
+            '$set': {
+                'status': new_value,
+                'timestamps' + '.' + new_value: datetime.now()
                 }
-            covers_c.update_one({"_id": query.cover_id}, update)
+            }
+        covers_c.update_one({"_id": query.cover_id}, update)
     except:
         raise HTTPException(status_code=422, detail="unable to step cover forward")
     
@@ -166,9 +184,9 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
         cover_items = []
         for document in cursor:
             if point_of_view == "seller":
-                price = pricing_utils.calculate_income(document["subtotal"], document["seller_fees"], pricing_config["TVA_coeff_HT"]).total
+                price = pricing_utils.calculate_income(document["advance"] + document["balance"], document["seller_fees"], pricing_config["TVA_coeff_HT"]).total
             else:
-                price = pricing_utils.calculate_checkout(document["subtotal"], document["buyer_fees"], pricing_config["TVA_coeff_HT"]).total
+                price = pricing_utils.calculate_checkout(document["advance"] + document["balance"], document["buyer_fees"], pricing_config["TVA_coeff_HT"]).total
 
             cover_items.append({
                 "id": str(document["_id"]),
@@ -218,9 +236,9 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
 
     # price
     if pov == "seller":
-        price = pricing_utils.calculate_income(cover["subtotal"], cover["seller_fees"], pricing_config["TVA_coeff_HT"]).total
+        price = pricing_utils.calculate_income(cover["advance"] + cover["balance"], cover["seller_fees"], pricing_config["TVA_coeff_HT"]).total
     else:
-        price = pricing_utils.calculate_checkout(cover["subtotal"], cover["buyer_fees"], pricing_config["TVA_coeff_HT"]).total
+        price = pricing_utils.calculate_checkout(cover["advance"] + cover["balance"], cover["buyer_fees"], pricing_config["TVA_coeff_HT"]).total
 
     # timestamps
     timestamps_src = cover["timestamps"]
@@ -242,6 +260,7 @@ async def get_cover_information(id: str, current_user = Depends(auth_router.get_
         mare_nsire=cover["mare_nsire"],
         cover_type=cover["cover_type"],
         cover_place=cover["cover_place"],
+        cover_place_is_offered=cover["cover_place_is_offered"],
         status=cover["status"],
         price=price,
         buyer_message=cover["message"],
@@ -285,3 +304,101 @@ async def update_notes(query: schemas.UpdateNotesQuery, current_user = Depends(a
     except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write covers collection")
+
+@router.put("/step-forward-signature")
+async def step_forward_signature(query: schemas.StepForwardSignatureQuery, authorization: Annotated[str | None, Header()] = None):
+    try:
+        assert authorization.split(" ")[1].encode('utf-8') == base64.b64encode((contracts_config["secret-token"] + ":").encode('utf-8'))
+    except:
+        raise HTTPException(status_code=401)
+    try:
+        cover_in_db = covers_c.find_one({"contract_id": query.contract_id})
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read covers collection")
+    
+    if cover_in_db is None:
+        raise HTTPException(status_code=404, detail="no cover exists with this contract id")
+
+    
+    if cover_in_db["status"] not in ["signingstarted", "buyersigned"]:
+        raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
+
+    try:
+        index = config["status"].index(cover_in_db["status"])
+        new_value = config["status"][index + 1]
+        update = {
+            '$set': {
+                'status': new_value,
+                'timestamps' + '.' + new_value: datetime.now()
+                }
+            }
+        covers_c.update_one({"contract_id": query.contract_id}, update)
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=422, detail="unable to step signature forward")
+    
+    return {"message": "successfully step-forwarded signature"}
+
+@router.get('/checkout', response_model=pricing_schemas.Checkout)
+async def get_checkout(cover_id: str, current_user = Depends(auth_router.get_current_user)):
+    try:
+        objectified_id = ObjectId(cover_id)
+    except:
+        raise HTTPException(status_code=422, detail="Unprocessable id.")
+
+    cover = covers_c.find_one(
+        {"_id": objectified_id}
+    )
+
+    if not cover:
+        raise HTTPException(status_code=404, detail="Cover not found.")
+    
+    if current_user["_id"] != cover["buyer_id"]:
+        raise HTTPException(status_code=403, detail="only buyer can get checkout")
+    
+    
+    if cover["status"] == "sellersigned":
+        checkout = pricing_utils.calculate_checkout(cover["advance"], cover["buyer_fees"], pricing_config["TVA_coeff_HT"])
+    elif cover["status"] == "downpaid":
+        checkout = pricing_utils.calculate_checkout(cover["balance"], cover["buyer_fees"], pricing_config["TVA_coeff_HT"])
+    else:
+        raise HTTPException(status_code=403, detail="status does not allow payment")
+
+    return pricing_schemas.Checkout(
+        subtotal=checkout.subtotal,
+        service_fees=checkout.service_fees,
+        total=checkout.total,
+        status=cover["status"]
+    )
+
+@router.put("/step-forward-payment")
+async def step_forward_payment(query: schemas.StepForwardPaymentQuery, current_user = Depends(auth_router.get_current_user)):
+    # no security yet: the current user can just use postman and step forward the status without actually paying
+    try:
+        cover_in_db = covers_c.find_one({"_id": query.cover_id})
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read covers collection")
+    
+    if cover_in_db is None:
+        raise HTTPException(status_code=404, detail="no cover exists with this id")
+
+    if cover_in_db["status"] not in ["sellersigned", "downpaid"]:
+        raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
+
+    try:
+        index = config["status"].index(cover_in_db["status"])
+        new_value = config["status"][index + 1]
+        update = {
+            '$set': {
+                'status': new_value,
+                'timestamps' + '.' + new_value: datetime.now()
+                }
+            }
+        covers_c.update_one({"_id": query.cover_id}, update)
+    except:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=422, detail="unable to step payment forward")
+    
+    return {"message": "successfully step-forwarded payment"}
