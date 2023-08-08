@@ -29,3 +29,9 @@ def calculate_income(subtotal: float, seller_fees: float, TVA_coeff_HT: float) -
         service_fees=service_fees,
         total=total
     )
+
+def calculate_advance(subtotal: float, advance_coeff: float):
+    return math.ceil(subtotal * advance_coeff)
+
+def calculate_balance(subtotal: float, advance_coeff: float):
+    return math.floor(subtotal * (1 - advance_coeff))

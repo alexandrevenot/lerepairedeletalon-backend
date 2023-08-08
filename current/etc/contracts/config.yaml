@@ -4,7 +4,7 @@ contracts-templates-ids:
   iac: 3bd80763-6fd9-4b28-91e7-f826a648962f
 
 signature-request-links-expiration-delay-hours: 168 # one week
-signature_request_delivery_method: email
+signature_request_delivery_method: embedded
 signed_document_delivery_method: email
 required_identification_methods:
   - sms

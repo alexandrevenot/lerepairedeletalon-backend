@@ -1,4 +1,3 @@
-import os
 import asyncio
 
 from fastapi import FastAPI
@@ -23,6 +22,7 @@ server.include_router(contracts_router.router)
 
 origins = [
     "http://localhost:4200",
+    "http://localhost:3002"
 ]
 
 server.add_middleware(

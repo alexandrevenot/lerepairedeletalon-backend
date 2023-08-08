@@ -16,6 +16,7 @@ class CoverQuery(BaseModel):
     mare_breed: str
     message: str
     cover_type: str
+    offered_cover_place: str
     status: str
 
     @validator('status')
@@ -34,7 +35,6 @@ class CoverQuery(BaseModel):
 
 class StepForwardCoverQuery(BaseModel):
     cover_id: str
-    refuse: bool = False
 
     @validator('cover_id')
     def cover_id_validator(cls, v):
@@ -65,6 +65,7 @@ class GetCoverInformation(BaseModel):
     contact_email: str
     cover_type: str
     cover_place: str
+    cover_place_is_offered: bool
     price: float
     buyer_message: str
     timestamps: dict
@@ -75,6 +76,19 @@ class GetCoverInformation(BaseModel):
 class UpdateNotesQuery(BaseModel):
     cover_id: str
     notes: str
+
+    @validator('cover_id')
+    def cover_id_validator(cls, v):
+        try:
+            return ObjectId(v)
+        except:
+            raise HTTPException(status_code=422, detail=f"cover_id is not readable")
+
+class StepForwardSignatureQuery(BaseModel):
+    contract_id: str
+
+class StepForwardPaymentQuery(BaseModel):
+    cover_id: str
 
     @validator('cover_id')
     def cover_id_validator(cls, v):

@@ -59,6 +59,7 @@ class GetProfileInformation(BaseModel):
     citizenship: str
     company_name: str = None
     company_status: str = None
+    capital: float = None
     head_office_address: str = None
     siret: str = None
 
@@ -66,6 +67,7 @@ class PutProfileInformationQuery(BaseModel):
     type: str
     company_name: str = None
     company_status: str = None
+    capital: float = None
     head_office_address: str = None
     siret: str = None
     gender: str
@@ -77,7 +79,7 @@ class PutProfileInformationQuery(BaseModel):
     @root_validator()
     def validate_atts(cls, values):
         if values.get("type") == "company":
-            for field in ["company_name", "company_status", "head_office_address", "siret"]:
+            for field in ["company_name", "company_status", "capital", "head_office_address", "siret"]:
                 if values.get(field) is None:
                     raise HTTPException(status_code=422, detail="missing mandatory fields")
         
