@@ -1,21 +1,4 @@
-from pydantic import BaseModel, validator
-from fastapi import HTTPException
-
-class SearchQuery(BaseModel):
-    nb: int
-    num_page: int
-
-    @validator('nb')
-    def num_validator(cls, v):
-        if v < 0:
-            raise HTTPException(status_code=422, detail="nb can't be < 0")
-        return v
-
-    @validator('num_page')
-    def offset_validator(cls, v):
-        if v < 0:
-            raise HTTPException(status_code=422, detail="num_page can't be < 0")
-        return v
+from pydantic import BaseModel
 
 class MosaicProfileInfo(BaseModel):
     id: str
@@ -24,7 +7,7 @@ class MosaicProfileInfo(BaseModel):
     city: str
     dep_name: str
     reg_name: str
-    price: float
+    price: int
     photo_id: str
 
 class SearchRM(BaseModel):
@@ -35,6 +18,39 @@ class DashboardStallionBox(BaseModel):
     name: str
     breed: str
     photoId: str
+    searchable: bool
 
 class GetMyStallionsRM(BaseModel):
     content: list[DashboardStallionBox]
+
+class CoverSpecs(BaseModel):
+    cover_type: str
+    cover_place: str
+    price: int
+
+class StallionProfileInformation(BaseModel):
+    owner: str
+    name: str
+    breed: str
+    n_sire: str
+    photos: list[str]
+    main_desc: str
+    color: str
+    age: int
+    height: float
+    offspring: str
+    performance: str
+    pedigree: list[str]
+    pedigree_po: str
+    stallion_additional_info: str
+    prices: list[CoverSpecs]
+    production_breeds: list[str]
+    cover_additional_info: str
+    location: dict[str, str | list[float]]
+    city: str
+    postal_code: str
+    dep_name: str
+    reg_name: str
+
+class GetStallionProfileInformationRM(BaseModel):
+    stallionProfile: StallionProfileInformation

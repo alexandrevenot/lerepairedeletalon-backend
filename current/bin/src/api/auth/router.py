@@ -1,194 +1,219 @@
+import os
+import logging
+import logging.handlers
 import traceback
 from typing import Annotated
+from bson.objectid import ObjectId
 
-from pymongo import MongoClient
 from fastapi import APIRouter, Depends, HTTPException, Header
 
 import src.api.auth.utils as utils
 import src.api.auth.schemas as schemas
 
-# global config
+import src.api.mailing.utils as mailing_utils
+
+from src.database.db import get_db
+
+# configs
 global_config = utils.load_global_config()
-
-# config
 config = utils.load_config()
+mailing_config = mailing_utils.load_config()
 
-# db
-mongo_url = "mongodb://localhost:27017/"
-client = MongoClient(mongo_url)
-db = getattr(client, global_config['db_to_use'])
-users_c = db.users
+# logging
+logger = logging.getLogger(__name__)
+logger.setLevel(20)
+handler = logging.handlers.RotatingFileHandler(
+    f'/lerepairedeletalon/server/import/var/log/API/{__name__}.log',
+    maxBytes=1024 * 1025 * 50,
+    backupCount=2,
+    mode='a'
+    )
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.info('Logger initialized')
 
 # routes
 router = APIRouter(prefix='/auth')
 
 @router.post('/register')
-async def register(user: schemas.RegisterQuery):
+async def register(user: schemas.RegisterQuery, db = Depends(get_db)):
     try:
-        user_in_db = users_c.find_one({"email": user.email})
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read users collection")
+        user_in_db = db.users.find_one({'email': user.email})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if user_in_db is not None:
-        raise HTTPException(status_code=400, detail="a user already exists with this email")
+        raise HTTPException(status_code=400, detail='a user already exists with this email')
     else:
         user_to_create = schemas.UserInDB(
             firstname = user.firstname,
             lastname = user.lastname,
             email = user.email,
             phone_number = user.phone_number,
-            hashedpassword = utils.get_password_hash(user.password)
+            hashedpassword = utils.get_password_hash(user.password),
+            email_is_verified = False
         )
 
         try:
-            users_c.insert_one(user_to_create.dict())
-            return {"message": "successfully registered user"}
+            db.users.insert_one(user_to_create.dict())
 
-        except:
-            print(traceback.format_exc())
-            raise HTTPException(status_code=500, detail="failed to write users collection")
+        except Exception as exc:
+            logger.error(f'failed to write db: {traceback.format_exc()}')
+            raise HTTPException(status_code=500, detail='failed to write db') from exc
+        
+        try:
+            code = utils.generate_sensitive_action_code(user.email, os.urandom(16).hex())
+
+            db.email_verification_codes.insert_one({
+                "email": user.email,
+                "code": code
+            })
+
+            mailing_utils.send_email_verification_email(
+                f"{user.firstname} {user.lastname}",
+                global_config["company_name"],
+                mailing_config["logo_url"],
+                f"{global_config['frontend_url']}{mailing_config['email_verification_route']}?code={code}",
+                mailing_config["service_email"],
+                mailing_config["password"],
+                mailing_config["service_email"],
+                user.email
+            )
+            return {'message': 'successfully registered user'}
+        except Exception as exc:
+            logger.error(f'failed to send email verification email: {traceback.format_exc()}')
+            raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+
 
 @router.post('/login')
-async def login(user: schemas.LoginQuery):
+async def login(user: schemas.LoginQuery, db = Depends(get_db)):
     try:
-        users = users_c.find({"email": user.email})
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read users collection")
+        user_in_db = db.users.find_one({'email': user.email})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
     
-    try:
-        user_in_db = users.next()
-    except:
-        raise HTTPException(status_code=404, detail="user not found")
+    if user_in_db is None:
+        raise HTTPException(status_code=404, detail='user not found')
 
-    if not utils.verify_password(user.password, user_in_db["hashedpassword"]):
-        raise HTTPException(status_code=401, detail="invalid credentials")
+    if not utils.verify_password(user.password, user_in_db['hashedpassword']):
+        raise HTTPException(status_code=401, detail='invalid credentials')
     else:
         return {
-            "accessToken": utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
-            "refreshToken": utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
+            'accessToken': utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
+            'refreshToken': utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
         }
 
 @router.post('/refresh-token')
-async def refresh_token(query: schemas.RefreshTokenQuery):
-    _id = utils.verify_token(query.token, "refresh")
+async def refresh_token(query: schemas.RefreshTokenQuery, db = Depends(get_db)):
+    _id = utils.verify_token(query.token, 'refresh')
 
     try:
-        users = users_c.find({"_id": _id})
-        user_in_db = users.next()
-    except:
-        raise HTTPException(status_code=401)
+        user_in_db = db.users.find_one({'_id': _id})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
+
+    if user_in_db is None:
+        raise HTTPException(status_code=404, detail='user not found')
 
     return {
-        "accessToken": utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
-        "refreshToken": utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
+        'accessToken': utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
+        'refreshToken': utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
     }
 
-async def get_current_user(authorization: Annotated[str | None, Header()] = None):
+async def get_current_user(authorization: Annotated[str | None, Header()] = None, db = Depends(get_db)):
     try:
         fields = authorization.split(' ')
         token = fields[1]
-    except:
-        raise HTTPException(status_code=401, detail="token not found in the request")
-
-    _id = utils.verify_token(token, "access")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail='token not found in the request') from exc
+    
+    _id = utils.verify_token(token, 'access')
 
     try:
-        users = users_c.find({"_id": _id})
-        return users.next()
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=401)
+        user_in_db = db.users.find_one({'_id': _id})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
 
-@router.get('/get-user')
+    if user_in_db is None:
+        raise HTTPException(status_code=404, detail='user not found')
+    else:
+        return user_in_db
+
+@router.get('/user-name')
 async def get_user(current_user = Depends(get_current_user)):
     return schemas.GetUserRM(
         firstname=current_user['firstname'],
         lastname=current_user['lastname']
     )
 
-async def get_user_info(id):
-    try:
-        user = users_c.find_one({"_id": id})
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read users collection")
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    
-    return user
-
 @router.get('/profile-information', response_model=schemas.GetProfileInformation)
 async def get_profile_information(current_user = Depends(get_current_user)):
     try:
-        user = users_c.find_one({"_id": current_user["_id"]})
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read users collection")
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    
-    try:
         return schemas.GetProfileInformation(
-            type=user["contract-identity"]["type"],
-            company_name=user["contract-identity"]['company_name'],
-            company_status=user["contract-identity"]['company_status'],
-            capital=user["contract-identity"]["capital"],
-            head_office_address=user["contract-identity"]['head_office_address'],
-            siret=user["contract-identity"]['siret'],
-            postal_address=user["contract-identity"]['postal_address'],
-            birthdate=user["contract-identity"]['birthdate'],
-            birthplace=user["contract-identity"]['birthplace'],
-            citizenship=user["contract-identity"]['citizenship'],
-            gender=user["contract-identity"]['gender']
+            type=current_user['contract_identity']['type'],
+            company_name=current_user['contract_identity']['company_name'],
+            company_status=current_user['contract_identity']['company_status'],
+            capital=current_user['contract_identity']['capital'],
+            head_office_address=current_user['contract_identity']['head_office_address'],
+            siret=current_user['contract_identity']['siret'],
+            postal_address=current_user['contract_identity']['postal_address'],
+            birthdate=current_user['contract_identity']['birthdate'],
+            birthplace=current_user['contract_identity']['birthplace'],
+            citizenship=current_user['contract_identity']['citizenship'],
+            gender=current_user['contract_identity']['gender']
         )
 
-    except:
+    except Exception:
         try:
             return schemas.GetProfileInformation(
-                type=user["contract-identity"]["type"],
-                postal_address=user["contract-identity"]['postal_address'],
-                birthdate=user["contract-identity"]['birthdate'],
-                birthplace=user["contract-identity"]['birthplace'],
-                citizenship=user["contract-identity"]['citizenship'],
-                gender=user["contract-identity"]['gender']
+                type=current_user['contract_identity']['type'],
+                postal_address=current_user['contract_identity']['postal_address'],
+                birthdate=current_user['contract_identity']['birthdate'],
+                birthplace=current_user['contract_identity']['birthplace'],
+                citizenship=current_user['contract_identity']['citizenship'],
+                gender=current_user['contract_identity']['gender']
             )
-        except:
-            raise HTTPException(status_code=404, detail="profile information not found")
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail='profile information not found') from exc
 
 @router.put('/profile-information')
-async def put_profile_information(query: schemas.PutProfileInformationQuery, current_user = Depends(get_current_user)):
-    try:
-        user = users_c.find_one({"_id": current_user["_id"]})
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read users collection")
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    
+async def put_profile_information(query: schemas.PutProfileInformationQuery, current_user = Depends(get_current_user), db = Depends(get_db)):    
     try:
         update = {
                 '$set': {
-                    'contract-identity': {
+                    'contract_identity': {
                     }
                 }
             }
 
-        if query.type == "company":
-            for field in ["type","company_name", "company_status", "capital", "head_office_address", "siret"]:
-                update["$set"]["contract-identity"][field] = getattr(query, field)
+        if query.type == 'company':
+            for field in ['type','company_name', 'company_status', 'capital', 'head_office_address', 'siret']:
+                update['$set']['contract_identity'][field] = getattr(query, field)
         else:
-            update["$set"]["contract-identity"]["type"] = query.type
+            update['$set']['contract_identity']['type'] = query.type
 
-        for field in ["gender", "postal_address", "birthdate", "birthplace", "citizenship"]:
-            update["$set"]["contract-identity"][field] = getattr(query, field)
+        for field in ['gender', 'postal_address', 'birthdate', 'birthplace', 'citizenship']:
+            update['$set']['contract_identity'][field] = getattr(query, field)
         
-        users_c.update_one({"_id": current_user["_id"]}, update)
+        db.users.update_one({'_id': current_user['_id']}, update)
 
-        return {"message": "successfully put profile information"}
-    except:
-        raise HTTPException(status_code=500, detail="unable to put profile information")
+        return {'message': 'successfully put profile information'}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail='unable to put profile information') from exc
+
+async def get_user_from_id(user_id: ObjectId, db):
+    try:
+        user_in_db = db.users.find_one({"_id": user_id})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail="failed to read db") from exc
+    
+    if user_in_db is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    
+    return user_in_db

@@ -1,54 +1,63 @@
+import logging
+import logging.handlers
 import traceback
 from bson.objectid import ObjectId
 
-from pymongo import MongoClient
 from fastapi import APIRouter, Depends, HTTPException
 
 import src.api.contracts.utils as utils
 import src.api.contracts.schemas as schemas
-import src.api.auth.router as auth_router
 import src.api.covers.router as covers_router
 import src.api.covers.schemas as covers_schemas
 
-# global config
-global_config = utils.load_global_config()
+from src.api.auth.router import get_current_user, get_user_from_id
+from src.database.db import get_db
 
-# config
+# configs
+global_config = utils.load_global_config()
 config = utils.load_config()
 
-# db
-mongo_url = "mongodb://localhost:27017/"
-client = MongoClient(mongo_url)
-db = getattr(client, global_config['db_to_use'])
-covers_c = db.covers
+# logging
+logger = logging.getLogger(__name__)
+logger.setLevel(20)
+handler = logging.handlers.RotatingFileHandler(
+    f'/lerepairedeletalon/server/import/var/log/API/{__name__}.log',
+    maxBytes=1024 * 1025 * 50,
+    backupCount=2,
+    mode='a'
+    )
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.info('Logger initialized')
 
 # routes
 router = APIRouter(prefix='/contracts')
 
-@router.put('/sign-contract')
-async def sign_contract(query: schemas.SignContract, current_user = Depends(auth_router.get_current_user)):
+@router.post('/engage-signature-process')
+async def engage_signature_process(query: schemas.SignContract, current_user = Depends(get_current_user), db = Depends(get_db)):
     # build contract data
     try:
-        cover = covers_c.find_one({"_id": query.cover_id})
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read covers collection")
+        cover_in_db = db.covers.find_one({"_id": query.cover_id})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
     
-    if cover is None:
-        raise HTTPException(status_code=404, detail="no cover exists with this id")
+    if cover_in_db is None:
+        raise HTTPException(status_code=404, detail="cover not found")
 
-    if current_user["_id"]!= cover["buyer_id"]:
-        raise HTTPException(status_code=401, detail="only buyer can ask for signature")
+    if current_user["_id"]!= cover_in_db["buyer_id"]:
+        raise HTTPException(status_code=401, detail="only buyer can engage signature process")
 
-    buyer_info = await auth_router.get_user_info(cover["buyer_id"])
-    seller_info = await auth_router.get_user_info(cover["seller_id"])
+    buyer_in_db = await get_user_from_id(cover_in_db["buyer_id"])
+    seller_in_db = await get_user_from_id(cover_in_db["seller_id"])
 
     try:
         returned_json = await utils.create_and_send_contract(
-            config["contracts-templates-ids"][cover["cover_type"]],
-            cover,
-            buyer_info,
-            seller_info,
+            config["contracts-templates-ids"][cover_in_db["cover_type"]],
+            cover_in_db,
+            buyer_in_db,
+            seller_in_db,
             True,
             config['signature-request-links-expiration-delay-hours'],
             config['signature_request_delivery_method'],
@@ -57,13 +66,14 @@ async def sign_contract(query: schemas.SignContract, current_user = Depends(auth
             config['secret-token']
         )
         assert returned_json is not None
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="unable to fill up contract template and engage signature")
+    except Exception as exc:
+        logger.error(f'failed to create and fill up contract: {traceback.format_exc()}')
+        raise HTTPException(status_code=422, detail="failed to create and fill up contract") from exc
+
+    await covers_router.step_forward_cover(covers_schemas.StepForwardCoverQuery(cover_id=str(query.cover_id)), current_user={"_id": current_user["_id"]})
 
     try:
-        await covers_router.step_forward_cover(covers_schemas.StepForwardCoverQuery(cover_id=str(query.cover_id)), current_user={"_id": current_user["_id"]})
-        covers_c.update_one(
+        db.covers.update_one(
             {"_id": query.cover_id},
             {
                 "$set": {
@@ -77,36 +87,38 @@ async def sign_contract(query: schemas.SignContract, current_user = Depends(auth
         )
 
         return {"message": "created and sent contract successfully"}
-    except:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write covers collection")
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
 
 @router.get('/sign-page-url')
-async def get_sign_page_url(cover_id: str, current_user = Depends(auth_router.get_current_user)):
+async def get_sign_page_url(cover_id: str, current_user = Depends(get_current_user), db = Depends(get_db)):
     try:
-        objectified_id = ObjectId(cover_id)
-    except:
-        raise HTTPException(status_code=422, detail="Unprocessable id.")
+        cover_id = ObjectId(cover_id)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="unprocessable cover_id") from exc
 
-    cover = covers_c.find_one(
-        {"_id": objectified_id}
-    )
-
-    if not cover:
-        raise HTTPException(status_code=404, detail="Cover not found.")
+    try:
+        cover_in_db = db.covers.find_one({"_id": cover_id})
+    except Exception as exc:
+        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=500, detail="failed to read db") from exc
     
-    if current_user['_id'] == cover["seller_id"]:
+    if cover_in_db is None:
+        raise HTTPException(status_code=404, detail="cover not found")
+    
+    if current_user['_id'] == cover_in_db["seller_id"]:
         pov = "seller"
-    elif current_user['_id'] == cover["buyer_id"]:
+    elif current_user['_id'] == cover_in_db["buyer_id"]:
         pov = "buyer"
     else:
-        raise HTTPException(status_code=401, detail="Only seller and buyer can get sign page url.")
+        raise HTTPException(status_code=401, detail="only seller and buyer can get sign page url")
 
-    if (pov == "buyer" and cover["status"] != "signingstarted") or (pov == "seller" and cover["status"] != "buyersigned"):
-        raise HTTPException(status_code=403, detail="cannot sign now")
+    if (pov == "buyer" and cover_in_db["status"] != "signingstarted") or (pov == "seller" and cover_in_db["status"] != "buyersigned"):
+        raise HTTPException(status_code=403, detail="can not sign now")
 
     # get user email
-    user_info = await auth_router.get_user_info(cover[pov + "_id"])
-    user_email = user_info["email"]
+    user_in_db = await get_user_from_id(cover_in_db[pov + "_id"])
+    user_email = user_in_db["email"]
 
-    return schemas.GetSignPageUrl(url=cover["sign_page_urls"][user_email])
+    return schemas.GetSignPageUrl(url=cover_in_db["sign_page_urls"][user_email])

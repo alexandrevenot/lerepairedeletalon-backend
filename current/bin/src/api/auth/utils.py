@@ -1,11 +1,11 @@
 import json
 from datetime import datetime, timedelta
+import hashlib
 
 import yaml
-from pydantic import BaseModel
 from fastapi import HTTPException
 from bson import ObjectId
-from jose import JWTError, jwt
+from jose import jwt
 from passlib.context import CryptContext
 
 ACCESS_SECRET_KEY = "433c8905cbe2837e7f68b9c3f0775eb044b090c55dc54006168a46efabb4c351"
@@ -64,3 +64,9 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return pwd_context.hash(password)
+
+def generate_sensitive_action_code(chain: str, salt: str):
+    data_to_hash = chain + salt
+    hasher = hashlib.sha256()
+    hasher.update(data_to_hash.encode('utf-8'))
+    return hasher.hexdigest()

@@ -1,12 +1,11 @@
 import pandas as pd
-import numpy as np
 import bisect
 import unicodedata
 
 NORMALIZED_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/geoloc_normalized.csv', sep=",")
 COMPLETE_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/geoloc_not_normalized.csv', sep=",")
 
-def find_city_not_normalized(city):
+def find_city_not_normalized(city) -> list:
     cities = []
     index = bisect.bisect_left(NORMALIZED_DF.loc[:,'city'], city)
     if index and NORMALIZED_DF.loc[index, 'city'] == city:
@@ -21,7 +20,7 @@ def find_city_not_normalized(city):
     else:
         return False
 
-def normalize(city_input):
+def normalize(city_input) -> str:
     res = city_input.replace("-", "")
     res = unicodedata.normalize('NFKD', res).encode('ASCII', 'ignore').decode('utf-8')
     res = res.lower()
@@ -30,7 +29,6 @@ def normalize(city_input):
 
 def find_city(city_input) -> list[pd.core.series.Series] | bool :
     return find_city_not_normalized(normalize(city_input))
-
 
 FRENCH_DEPS_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/french_deps.csv', sep=",")
 

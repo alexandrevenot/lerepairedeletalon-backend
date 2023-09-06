@@ -1,8 +1,15 @@
 import asyncio
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+
+dirs = ["log", "run"]
+for d in dirs:
+    p = f"/lerepairedeletalon/server/import/var/{d}/API/"
+    if not os.path.isdir(p):
+        os.mkdir(p)
 
 import src.api.auth.router as auth_router
 import src.api.stallions.router as stallions_router

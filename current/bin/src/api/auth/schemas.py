@@ -1,9 +1,11 @@
 import re
+from datetime import datetime
 
 from fastapi import HTTPException
 from pydantic import BaseModel, validator, root_validator
 
-email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+EMAIL_PATTERN = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+PHONE_NUMBER_PATTERN = r'^\+33\d{9}$'
 
 class RegisterQuery(BaseModel):
     firstname: str
@@ -14,19 +16,19 @@ class RegisterQuery(BaseModel):
 
     @validator('email')
     def email_validator(cls, v):
-        if re.match(email_pattern, v) is None:
+        if re.match(EMAIL_PATTERN, v) is None:
             raise HTTPException(status_code=422, detail="bad email format")
+        return v
+
+    @validator('phone_number')
+    def phone_number_validator(cls, v):
+        if re.match(PHONE_NUMBER_PATTERN, v) is None:
+            raise HTTPException(status_code=422, detail="bad phone number format")
         return v
 
 class LoginQuery(BaseModel):
     email: str
     password: str
-
-    @validator('email')
-    def email_validator(cls, v):
-        if re.match(email_pattern, v) is None:
-            raise HTTPException(status_code=422, detail="bad email format")
-        return v
 
 class RefreshTokenQuery(BaseModel):
     token: str
@@ -45,6 +47,7 @@ class UserInDB(BaseModel):
     email: str
     phone_number: str
     hashedpassword: str
+    email_is_verified: bool
 
 class GetUserRM(BaseModel):
     firstname: str
@@ -78,6 +81,7 @@ class PutProfileInformationQuery(BaseModel):
 
     @root_validator()
     def validate_atts(cls, values):
+        # fields presence
         if values.get("type") == "company":
             for field in ["company_name", "company_status", "capital", "head_office_address", "siret"]:
                 if values.get(field) is None:
@@ -86,4 +90,10 @@ class PutProfileInformationQuery(BaseModel):
         elif values.get("type") != "individual":
             raise HTTPException(status_code=422, detail="type has to be either 'individual' or 'company'")
         
+        # fields content
+        try:
+            datetime.strptime(values.get("birthdate"), "%d/%m/%Y")
+        except:
+            raise HTTPException(status_code=422, detail="incorrect birth_date date format")
+
         return values
