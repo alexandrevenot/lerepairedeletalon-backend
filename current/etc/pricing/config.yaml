@@ -1,4 +1,4 @@
 TVA_coeff_HT: 0.2 # TVA à payer = prix HT * TVA_coeff_HT
-buyer_fees: 0.025 # Frais de service pour l'acheteur = prix TTC de la saillie (celui entré par l'utilisateur) * buyer_fees
-seller_fees: 0.025
+buyer_fees: 0.06 # Frais de service pour l'acheteur = prix TTC de la saillie (celui entré par l'utilisateur) * buyer_fees
+seller_fees: 0.06
 advance_coeff: 0.5 # L'acompte vaut math.ceil(prix * advance_coeff), le solde vaut math.floor(prix * (1 - advance_coeff))

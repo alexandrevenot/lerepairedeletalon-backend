@@ -7,3 +7,74 @@ cover_types:
   - iai
   - iarp
   - iac
+
+breeds:
+  - AQPS
+  - Anglo-Arabe
+  - Arabe
+  - Ardennais
+  - Auxois
+  - Barbe
+  - Baudet du Poitou
+  - Boulonnais
+  - Breton
+  - Camargue
+  - Cheval Castillonnais
+  - Cheval Corse
+  - Cheval Miniature Français
+  - Cheval de Dressage Français
+  - Cheval de Mérens
+  - Cheval de Race Auvergne
+  - Cheval de Sport Anglo-Normand
+  - Cheval du Vercors de Barraquand
+  - Cob Normand
+  - Comtois
+  - Connemara
+  - Criollo
+  - Crème
+  - Dartmoor
+  - Fjord
+  - Franches-Montagnes
+  - Haflinger
+  - Henson
+  - Highland
+  - Irish Cob
+  - Islandais
+  - Landais
+  - Lipizzan
+  - Lusitanien
+  - New-Forest
+  - Percheron
+  - Poitevin Mulassier
+  - Poney Français de Selle
+  - Pottok
+  - Pur Sang Anglais
+  - Selle Français
+  - Shagya
+  - Shetland
+  - Trait du Nord
+  - Trakehner
+  - Trotteur Français
+  - Welsh
+  - Âne Bourbonnais
+  - Âne Corse
+  - Âne Grand Noir du Berry
+  - Âne Normand
+  - Âne de Provence
+  - Âne des Pyrénées
+  - Âne du Cotentin
+
+colors:
+  - Noir
+  - Noir pangaré
+  - Bai
+  - Isabelle
+  - Souris
+  - Alezan
+  - Alezan brûlé
+  - Café au lait
+  - Palomino
+  - Blanc
+  - Gris
+  - Crème
+  - Chocolat

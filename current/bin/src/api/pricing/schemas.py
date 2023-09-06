@@ -1,12 +1,12 @@
 from pydantic import BaseModel
 
 class PriceWithFees(BaseModel):
-    subtotal: float
+    subtotal: int
     service_fees: int
-    total: float
+    total: int
 
 class Checkout(BaseModel):
-    subtotal: float
+    subtotal: int
     service_fees: int
-    total: float
+    total: int
     status: str

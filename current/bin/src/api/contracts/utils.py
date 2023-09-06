@@ -26,7 +26,6 @@ def build_company_identification_field(
     birthdate: str,
     birthplace: str,
     citizenship: str
-    
 ):
     res = f"La société {company_name}, {company_status} au capital de {capital}€, donc le siège social est au {head_office_address}, "
     res += f"immatriculée au registre du commerce et des sociétés de la chambre de commerce et d'industrie de Paris sous le numéro de SIRET {siret}, "
@@ -111,62 +110,62 @@ async def create_and_send_contract(
     placeholder_fields.append({
         "api_key": "seller_identification",
         "value": build_company_identification_field(
-            seller_document["contract-identity"]["company_name"],
-            seller_document["contract-identity"]["company_status"],
-            seller_document["contract-identity"]["capital"],
-            seller_document["contract-identity"]["head_office_address"],
-            seller_document["contract-identity"]["siret"],
-            seller_document["contract-identity"]["gender"],
+            seller_document["contract_identity"]["company_name"],
+            seller_document["contract_identity"]["company_status"],
+            seller_document["contract_identity"]["capital"],
+            seller_document["contract_identity"]["head_office_address"],
+            seller_document["contract_identity"]["siret"],
+            seller_document["contract_identity"]["gender"],
             seller_document["firstname"],
             seller_document["lastname"],
-            seller_document["contract-identity"]["postal_address"],
-            seller_document["contract-identity"]["birthdate"],
-            seller_document["contract-identity"]["birthplace"],
-            seller_document["contract-identity"]["citizenship"]
+            seller_document["contract_identity"]["postal_address"],
+            seller_document["contract_identity"]["birthdate"],
+            seller_document["contract_identity"]["birthplace"],
+            seller_document["contract_identity"]["citizenship"]
         )
     })
     
-    if buyer_document["contract-identity"]["type"] == "individual":
+    if buyer_document["contract_identity"]["type"] == "individual":
         placeholder_fields.append({
             "api_key": "buyer_identification",
             "value": build_person_identification_field(
-                buyer_document["contract-identity"]["gender"],
+                buyer_document["contract_identity"]["gender"],
                 buyer_document["firstname"],
                 buyer_document["lastname"],
-                buyer_document["contract-identity"]["postal_address"],
-                buyer_document["contract-identity"]["birthdate"],
-                buyer_document["contract-identity"]["birthplace"],
-                buyer_document["contract-identity"]["citizenship"]
+                buyer_document["contract_identity"]["postal_address"],
+                buyer_document["contract_identity"]["birthdate"],
+                buyer_document["contract_identity"]["birthplace"],
+                buyer_document["contract_identity"]["citizenship"]
             )
         })
-    elif buyer_document["contract-identity"]["type"] == "company":
+    elif buyer_document["contract_identity"]["type"] == "company":
         placeholder_fields.append({
             "api_key": "buyer_identification",
             "value": build_company_identification_field(
-                buyer_document["contract-identity"]["company_name"],
-                buyer_document["contract-identity"]["company_status"],
-                buyer_document["contract-identity"]["capital"],
-                buyer_document["contract-identity"]["head_office_address"],
-                buyer_document["contract-identity"]["siret"],
-                buyer_document["contract-identity"]["gender"],
+                buyer_document["contract_identity"]["company_name"],
+                buyer_document["contract_identity"]["company_status"],
+                buyer_document["contract_identity"]["capital"],
+                buyer_document["contract_identity"]["head_office_address"],
+                buyer_document["contract_identity"]["siret"],
+                buyer_document["contract_identity"]["gender"],
                 buyer_document["firstname"],
                 buyer_document["lastname"],
-                buyer_document["contract-identity"]["postal_address"],
-                buyer_document["contract-identity"]["birthdate"],
-                buyer_document["contract-identity"]["birthplace"],
-                buyer_document["contract-identity"]["citizenship"]
+                buyer_document["contract_identity"]["postal_address"],
+                buyer_document["contract_identity"]["birthdate"],
+                buyer_document["contract_identity"]["birthplace"],
+                buyer_document["contract_identity"]["citizenship"]
             )
         })
     
-    for field in ["stallion_name", "stallion_breed", "mare_name", "mare_breed", "stallion_nsire", "mare_nsire"]:
+    for field in ["stallion_name", "stallion_breed", "mare_name", "mare_breed", "stallion_nsire", "mare_nsire", "cover_place"]:
         placeholder_fields.append({
             "api_key": field,
             "value": cover_document[field]
         })
-    
+
     placeholder_fields.append({
-        "api_key": "cover_place",
-        "value": cover_document["cover_place"]
+        "api_key": "stallion_production_breeds",
+        "value": ", ".join(cover_document["stallion_production_breeds"])
     })
 
     advance = pricing_utils.calculate_checkout(

@@ -10,8 +10,8 @@ class SignContract(BaseModel):
     def cover_id_validator(cls, v):
         try:
             return ObjectId(v)
-        except:
-            raise HTTPException(status_code=422, detail=f"cover_id is not readable")
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="cover_id is not readable") from exc
 
 class GetSignPageUrl(BaseModel):
     url: str
