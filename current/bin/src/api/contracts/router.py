@@ -49,8 +49,8 @@ async def engage_signature_process(query: schemas.SignContract, current_user = D
     if current_user["_id"]!= cover_in_db["buyer_id"]:
         raise HTTPException(status_code=401, detail="only buyer can engage signature process")
 
-    buyer_in_db = await get_user_from_id(cover_in_db["buyer_id"])
-    seller_in_db = await get_user_from_id(cover_in_db["seller_id"])
+    buyer_in_db = await get_user_from_id(cover_in_db["buyer_id"], db)
+    seller_in_db = await get_user_from_id(cover_in_db["seller_id"], db)
 
     try:
         returned_json = await utils.create_and_send_contract(
@@ -70,7 +70,7 @@ async def engage_signature_process(query: schemas.SignContract, current_user = D
         logger.error(f'failed to create and fill up contract: {traceback.format_exc()}')
         raise HTTPException(status_code=422, detail="failed to create and fill up contract") from exc
 
-    await covers_router.step_forward_cover(covers_schemas.StepForwardCoverQuery(cover_id=str(query.cover_id)), current_user={"_id": current_user["_id"]})
+    await covers_router.step_forward_cover(covers_schemas.StepForwardCoverQuery(cover_id=str(query.cover_id)), current_user={"_id": current_user["_id"]}, db = db)
 
     try:
         db.covers.update_one(
@@ -118,7 +118,7 @@ async def get_sign_page_url(cover_id: str, current_user = Depends(get_current_us
         raise HTTPException(status_code=403, detail="can not sign now")
 
     # get user email
-    user_in_db = await get_user_from_id(cover_in_db[pov + "_id"])
+    user_in_db = await get_user_from_id(cover_in_db[pov + "_id"], db)
     user_email = user_in_db["email"]
 
     return schemas.GetSignPageUrl(url=cover_in_db["sign_page_urls"][user_email])

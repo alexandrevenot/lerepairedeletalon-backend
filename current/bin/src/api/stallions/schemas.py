@@ -28,6 +28,10 @@ class CoverSpecs(BaseModel):
     cover_place: str
     price: int
 
+class Location(BaseModel):
+    type: str
+    coordinates: list[float]
+
 class StallionProfileInformation(BaseModel):
     owner: str
     name: str
@@ -46,7 +50,7 @@ class StallionProfileInformation(BaseModel):
     prices: list[CoverSpecs]
     production_breeds: list[str]
     cover_additional_info: str
-    location: dict[str, str | list[float]]
+    location: Location
     city: str
     postal_code: str
     dep_name: str
