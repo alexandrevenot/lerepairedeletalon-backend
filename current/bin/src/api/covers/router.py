@@ -116,6 +116,7 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
 
     ## adding buyer_id, timestamps and price
     new_document.update({
+        "status": "offered",
         "buyer_id": current_user["_id"],
         "stallion_name": stallion_in_db["name"],
         "stallion_breed": stallion_in_db["breed"],
@@ -140,7 +141,7 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
         logger.error(f'failed to write db: {traceback.format_exc()}')
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-@router.put('/step-forward-cover') # manually only, does not apply to signing or paying
+@router.post('/step-forward-cover') # manually only, does not apply to signing or paying
 async def step_forward_cover(query: schemas.StepForwardCoverQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
     try:
         cover_in_db = db.covers.find_one({"_id": query.cover_id})
@@ -185,7 +186,7 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
         'status': {'$in': status_l},
         point_of_view + '_id': current_user["_id"]
     }
-
+    
     try:
         cursor = db.covers.find(pattern).sort('date', -1)
     except Exception as exc:
@@ -209,7 +210,7 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
     
     return schemas.GetCoverGroupRM(items=cover_items)
 
-@router.get('/get-cover-information', response_model=schemas.GetCoverInformation)
+@router.get('/cover-information', response_model=schemas.GetCoverInformation)
 async def get_cover_information(cover_id: str, current_user = Depends(get_current_user), db = Depends(get_db)):
     try:
         cover_id = ObjectId(cover_id)
@@ -382,7 +383,7 @@ async def get_checkout(cover_id: str, current_user = Depends(get_current_user), 
         status=cover_in_db["status"]
     )
 
-@router.put("/step-forward-payment")
+@router.post("/step-forward-payment")
 async def step_forward_payment(query: schemas.StepForwardPaymentQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
     # no security yet: the current user can just use postman and step forward the status without actually paying
     try:
