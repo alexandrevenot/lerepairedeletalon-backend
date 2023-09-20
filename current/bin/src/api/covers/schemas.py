@@ -3,6 +3,10 @@ from bson.objectid import ObjectId
 from pydantic import BaseModel, validator
 from fastapi import HTTPException
 
+import src.api.stallions.utils as stallions_utils
+
+stallions_config = stallions_utils.load_config()
+
 class CoverQuery(BaseModel):
     seller_id: str
     stallion_nsire: str
@@ -19,6 +23,12 @@ class CoverQuery(BaseModel):
             return ObjectId(v)
         except Exception as exc:
             raise HTTPException(status_code=422, detail="seller_id is not readable") from exc
+    
+    @validator('cover_type')
+    def cover_type_validator(cls, v):
+        if v not in stallions_config["cover_types"]:
+            raise HTTPException(status_code=422, detail="cover type not allowed")
+        return v
 
 class StepForwardCoverQuery(BaseModel):
     cover_id: str
@@ -53,7 +63,6 @@ class GetCoverInformation(BaseModel):
     contact_email: str
     cover_type: str
     cover_place: str
-    cover_place_is_offered: bool
     price: float
     buyer_message: str
     timestamps: dict

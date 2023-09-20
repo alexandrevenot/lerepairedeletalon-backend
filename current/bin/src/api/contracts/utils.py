@@ -52,17 +52,28 @@ def build_person_identification_field(
     res += f"de nationalité {citizenship}"
     return res
 
-def build_last_payment_cases():
-    res = "- La jument, à l'issue de la saillie dont ce contrat fait l'objet, obtient un poulain, et ce poulain a passé le seuil des 48h en vie. "
-    res += "Dans ce cas, la seconde fraction devra être payée dans le délai d'un mois après les 48h du poulain.\n"
+def build_balance_payment_conditions(balance_payment_condition):
+    if balance_payment_condition == "covered":
+        res = "- La jument est gestante. Dans ce cas, la seconde fraction devra être payée dans le délai d'un mois après le début de la gestation.\n"
+    elif balance_payment_condition == "covered_1_10":
+        res = "- La jument est gestante au premier octobre de l'année de la saillie. Dans ce cas, la seconde fraction devra être payée au plus tard le 31 octobre de l'année de la saillie.\n"
+    elif balance_payment_condition == "living_foal":
+        res = "- La jument, à l'issue de la saillie dont ce contrat fait l'objet, obtient un poulain vivant. "
+        res += "Dans ce cas, la seconde fraction devra être payée dans le délai d'un mois après la naissance du poulain.\n"
+    elif balance_payment_condition == "living_foal_48":
+        res = "- La jument, à l'issue de la saillie dont ce contrat fait l'objet, obtient un poulain, et ce poulain a passé le seuil des 48h en vie. "
+        res += "Dans ce cas, la seconde fraction devra être payée dans le délai d'un mois après les 48h du poulain.\n"
     res += "- La jument a été vendue entre le paiement de la première fraction et celui de la seconde. Dans ce cas, la seconde fraction doit être payée dans le délai d'un mois suivant l'acte de vente.\n"
     return res
 
-def build_use_conditions():
-    res = "Le prix de la saillie inclut le prix de fabrication des doses, ainsi que leur acheminement dans le centre d'insémination.\n"
-    res += "Les doses seront envoyées au centre d'insémination sur demande.\n"
-    res += "L'acheteur atteste avoir connaissance des conditions dans lesquelles se déroulent les inséminations, ainsi que les risques associés.\n"
-    res += "Tous les frais générés par la saillie autres que la fabrication des doses et leur acheminement sont à la charge de l'Acheteur.\n"
+def build_use_conditions(cover_document):
+    if cover_document["cover_type"] in ["iart", "iac"]:
+        res = "Le prix de la saillie inclut le prix de fabrication des doses, ainsi que leur acheminement dans le centre d'insémination.\n"
+        res += "Les doses seront envoyées au centre d'insémination sur demande.\n"
+        res += "L'acheteur atteste avoir connaissance des conditions dans lesquelles se déroulent les inséminations, ainsi que les risques associés.\n"
+        res += "Tous les frais générés par la saillie autres que la fabrication des doses et leur acheminement sont à la charge de l'Acheteur.\n"
+        left_straws_owner_str = "de l'Acheteur" if cover_document["left_straws_owner"] == "buyer" else "du Vendeur"
+        res += f"Si l'insémination est un succès, les paillettes restantes sont la propriété {left_straws_owner_str}."
     return res
 
 async def create_and_send_contract(
@@ -192,12 +203,12 @@ async def create_and_send_contract(
 
     placeholder_fields.append({
         "api_key": "last_payment_validity_cases",
-        "value": build_last_payment_cases()
+        "value": build_balance_payment_conditions(cover_document["balance_payment_condition"])
     })
 
     placeholder_fields.append({
         "api_key": "use_conditions",
-        "value": build_use_conditions()
+        "value": build_use_conditions(cover_document)
     })
 
     data = {

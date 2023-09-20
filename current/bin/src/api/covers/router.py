@@ -13,6 +13,7 @@ import src.api.covers.schemas as schemas
 import src.api.pricing.utils as pricing_utils
 import src.api.pricing.schemas as pricing_schemas
 import src.api.contracts.utils as contracts_utils
+import src.api.stallions.utils as stallions_utils
 
 from src.api.auth.router import get_current_user, get_user_from_id
 from src.database.db import get_db
@@ -22,6 +23,7 @@ global_config = utils.load_global_config()
 config = utils.load_config()
 pricing_config = pricing_utils.load_config()
 contracts_config = contracts_utils.load_config()
+stallions_config = stallions_utils.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -89,20 +91,20 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
         if line["cover_type"] == cover.cover_type:
             subtotal = line["price"]
             cover_place = line["cover_place"]
+            advance_percentage = line["advance_percentage"]
+            balance_payment_condition = line["balance_payment_condition"]
+            left_straws_owner = line["left_straws_owner"]
     
     if subtotal is None:
         raise HTTPException(status_code=404, detail="cover type does not exist on stallion")
 
-    if cover_place == "":
+    if cover.cover_type in stallions_config["cover_types_for_which_cover_place_has_to_be_offered"]:
         if cover.offered_cover_place == "":
             raise HTTPException(status_code=422, detail="a cover place has to be offered")
         else:
             cover_place = cover.offered_cover_place
-            cover_place_is_offered = True
     else:
-        if cover.offered_cover_place == "":
-            cover_place_is_offered = False
-        else:
+        if cover.offered_cover_place != "":
             raise HTTPException(status_code=422, detail="cover place imposed on this cover")
 
     new_document = cover.dict()
@@ -121,11 +123,12 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
         "stallion_name": stallion_in_db["name"],
         "stallion_breed": stallion_in_db["breed"],
         "stallion_production_breeds": stallion_in_db["production_breeds"],
+        "balance_payment_condition": balance_payment_condition,
+        "left_straws_owner": left_straws_owner,
         "timestamps": timestamps,
         "cover_place": cover_place,
-        "cover_place_is_offered": cover_place_is_offered,
-        "advance": pricing_utils.calculate_advance(subtotal, pricing_config["advance_coeff"]),
-        "balance": pricing_utils.calculate_balance(subtotal, pricing_config["advance_coeff"]),
+        "advance": pricing_utils.calculate_advance(subtotal, advance_percentage),
+        "balance": pricing_utils.calculate_balance(subtotal, advance_percentage),
         "buyer_fees": pricing_config["buyer_fees"],
         "seller_fees": pricing_config["seller_fees"],
         "notes" : {
@@ -269,7 +272,6 @@ async def get_cover_information(cover_id: str, current_user = Depends(get_curren
         mare_nsire=cover_in_db["mare_nsire"],
         cover_type=cover_in_db["cover_type"],
         cover_place=cover_in_db["cover_place"],
-        cover_place_is_offered=cover_in_db["cover_place_is_offered"],
         status=cover_in_db["status"],
         price=price,
         buyer_message=cover_in_db["message"],

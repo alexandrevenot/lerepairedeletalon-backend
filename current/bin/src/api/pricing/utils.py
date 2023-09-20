@@ -30,11 +30,11 @@ def calculate_income(subtotal: int, seller_fees: float, TVA_coeff_HT: float) -> 
         total=total
     )
 
-def calculate_advance(subtotal: int, advance_coeff: float) -> int: 
-    return math.ceil(subtotal * advance_coeff)
+def calculate_advance(subtotal: int, advance_coeff: int) -> int: 
+    return math.ceil(subtotal * advance_coeff / 100)
 
-def calculate_balance(subtotal: int, advance_coeff: float) -> int:
-    return math.floor(subtotal * (1 - advance_coeff))
+def calculate_balance(subtotal: int, advance_coeff: int) -> int:
+    return math.floor(subtotal * (100 - advance_coeff) / 100)
 
 def calculate_real_max_price(required_max_price: float, buyer_fees: float, TVA_coeff_HT: float) -> float:
     d = 1 + buyer_fees * (1 + TVA_coeff_HT)
