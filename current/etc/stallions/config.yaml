@@ -5,8 +5,21 @@ cover_types:
   - lib
   - hand
   - iai
-  - iarp
+  - iart
   - iac
+
+cover_types_for_which_cover_place_has_to_be_offered:
+  - iart
+  - iac
+
+balance_payment_conditions:
+  - covered
+  - covered_1_10
+  - living_foal
+  - living_foal_48
+
+advance_min_percentage_value: 15
+advance_max_percentage_value: 50
 
 breeds:
   - AQPS

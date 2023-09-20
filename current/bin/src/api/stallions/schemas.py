@@ -27,6 +27,9 @@ class CoverSpecs(BaseModel):
     cover_type: str
     cover_place: str
     price: int
+    advance_percentage: int
+    balance_payment_condition: str
+    left_straws_owner: str
 
 class Location(BaseModel):
     type: str

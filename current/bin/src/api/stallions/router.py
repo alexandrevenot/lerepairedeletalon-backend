@@ -44,12 +44,13 @@ async def search(
     limit: int,
     min_price: float = None,
     max_price: float = None,
+    min_height: int = None,
+    max_height: int = None,
     lat: float = None,
     lng: float = None,
     distance: float = None, # km
     breeds: Annotated[list[str] | None, Query()] = None,
     production_breeds: Annotated[list[str] | None, Query()] = None,
-    colors: Annotated[list[str] | None, Query()] = None,
     cover_types: Annotated[list[str] | None, Query()] = None,
     db = Depends(get_db)
 ):
@@ -61,11 +62,6 @@ async def search(
 
     if limit <= 0:
         raise HTTPException(status_code=422, detail="limit can't be <= 0")
-
-    if colors is not None:
-        for color in colors:
-            if color not in config["colors"]:
-                raise HTTPException(status_code=422, detail="a color is not allowed")
 
     if production_breeds is not None:
         for production_breed in production_breeds:
@@ -107,10 +103,17 @@ async def search(
     if production_breeds is not None:
         query["production_breeds"] = {"$in": production_breeds}
 
-    # color
-    if colors is not None:
-        query["color"] = {"$in": colors}
-    
+    # height
+    height_query = {}
+    if min_height is not None:
+        height_query["$gte"] = min_height
+
+    if max_height is not None:
+        height_query["$lte"] = max_height
+
+    if height_query:
+        query["height"] = height_query
+
     # distance
     distance_case = 0
     for var in [lat, lng, distance]:
@@ -132,6 +135,9 @@ async def search(
             query["prices"] = {}
             query["prices"]["$elemMatch"] = {}
             query["prices"]["$elemMatch"]["cover_type"] = {"$in": cover_types}
+
+    # searchability
+    query["searchable"] = True
 
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "prices": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
@@ -263,6 +269,9 @@ async def register_new_stallion(
     cover_types: Annotated[list[str], Form()],
     cover_places: Annotated[list[str], Form()],
     prices: Annotated[list[int], Form()],
+    balance_payment_conditions: Annotated[list[str], Form()],
+    advance_percentages: Annotated[list[int], Form(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])],
+    left_straws_owners: Annotated[list[str], Form()],
     pedigree: Annotated[list[str], Form()] = None,
     cover_additional_info: Annotated[str, Form()] = "",
     performance: Annotated[str, Form()] = "",
@@ -325,7 +334,7 @@ async def register_new_stallion(
 
 
     length = len(cover_types)
-    for l in [cover_places, prices]:
+    for l in [cover_places, prices, balance_payment_conditions, advance_percentages, left_straws_owners]:
         if len(l) != length:
             raise HTTPException(status_code=422, detail="cover places, types and prices lengths are not equal")
 
@@ -333,11 +342,30 @@ async def register_new_stallion(
         raise HTTPException(status_code=422, detail='atleast 1 cover type is duplicated')
 
     processed_prices = []
-    for cover_type, cover_place, price in zip(cover_types, cover_places, prices):
-        if cover_type in config["cover_types"]:
-            processed_prices.append({"cover_type": cover_type, "cover_place": cover_place ,"price": price})
-        else:
+    for cover_type, cover_place, price, balance_payment_condition, advance_percentage, left_straws_owner \
+    in zip(cover_types, cover_places, prices, balance_payment_conditions, advance_percentages, left_straws_owners):
+        if cover_type not in config["cover_types"]:
             raise HTTPException(status_code=422, detail="unknown cover type")
+        
+        if cover_type in config["cover_types_for_which_cover_place_has_to_be_offered"]:
+            if cover_place != "" or left_straws_owner not in ["seller"," buyer"]:
+                raise HTTPException(status_code=422, detail="invalid cover_place or left_straws_owner params")
+        else:
+            if cover_place == "" or left_straws_owner != "":
+                raise HTTPException(status_code=422, detail="invalid cover_place or left_straws_owner params")
+        
+        if balance_payment_condition not in config["balance_payment_conditions"]:
+            raise HTTPException(status_code=422, detail="unprocessable balance payment condition")
+
+        processed_prices.append({
+            "cover_type": cover_type,
+            "cover_place": cover_place,
+            "price": price,
+            "advance_percentage": advance_percentage,
+            "balance_payment_condition": balance_payment_condition,
+            "left_straws_owner": left_straws_owner
+            })
+            
 
     if pedigree is None:
         pedigree = []

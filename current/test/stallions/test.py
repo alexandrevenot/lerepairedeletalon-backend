@@ -12,10 +12,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 import src.api.auth.router as auth_router
 import src.api.stallions.router as stallions_router
+import src.api.stallions.utils as stallions_utils
 import src.api.pricing.utils as pricing_utils
 
 fake_client = mongomock.MongoClient()
 fake_db = fake_client.main
+
+config = stallions_utils.load_config()
 
 server = FastAPI()
 
@@ -79,6 +82,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -156,6 +162,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -186,6 +195,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -216,6 +228,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -246,6 +261,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -276,6 +294,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -307,6 +328,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -338,6 +362,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -371,6 +398,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -403,6 +433,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -435,6 +468,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'wtf')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -445,7 +481,7 @@ class StallionsTest(unittest.TestCase):
         response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
         self.assertEqual(response.status_code, 422)
 
-        # cover places, types and prices different lengths
+        # cover parameters different lengths
         files = (
             ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
@@ -467,6 +503,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iac')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -501,6 +540,12 @@ class StallionsTest(unittest.TestCase):
             ("cover_places", (None, 'là')),
             ("prices", (None, '750')),
             ("prices", (None, '840')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -532,6 +577,247 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
             ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when balance_payment_condition is not part of those required
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iai')),
+            ("cover_places", (None, 'là')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'wtf')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when advance_percentage is > authorized values
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iai')),
+            ("cover_places", (None, 'là')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, str(config["advance_max_percentage_value"] + 1))),
+            ('left_straws_owners', (None, '')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when advance_percentage is < authorized values
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iai')),
+            ("cover_places", (None, 'là')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, str(config["advance_min_percentage_value"] - 1))),
+            ('left_straws_owners', (None, '')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when left_straws_owner not empty but iai
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iai')),
+            ("cover_places", (None, 'là')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, 'seller')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when cover_place empty but iai
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iai')),
+            ("cover_places", (None, '')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when cover_place not empty but iac
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iac')),
+            ("cover_places", (None, 'là')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, 'seller')),
+            ("pedigree", (None, 'Popa')),
+            ("cover_additional_info", (None, "cover additional info")),
+            ("performance", (None, "perf")),
+            ("pedigree_po", (None, "pedigree perfs offspring")),
+            ("stallion_additional_info", (None, "stallion additional info")),
+            ("offspring", (None, "the offspring"))
+        )
+        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # when left_straws_owner empty but iac
+        files = (
+            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
+            ("name", (None, "Michel du Rouet")),
+            ("breed", (None, "Selle Français")),
+            ("n_sire", (None, "65123458X")),
+            ("main_desc", (None, "desc")),
+            ("color", (None, "Bai")),
+            ("height", (None, "170")),
+            ("birthdate", (None, "28/10/1998")),
+            ("lat", (None, "0.0")),
+            ("lng", (None, "7")),
+            ("city", (None, "Toulouse")),
+            ("postal_code", (None, "31000")),
+            ("production_breeds", (None, "Selle Français")),
+            ("production_breeds", (None, "Camargue")),
+            ("cover_types", (None, 'iac')),
+            ("cover_places", (None, '')),
+            ("prices", (None, '0.0')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -563,6 +849,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
             ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
             ("pedigree_po", (None, "pedigree perfs offspring")),
@@ -596,6 +885,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
             ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("pedigree", (None, 'Moman')),
             ("pedigree", (None, 'Grand-Popa')),
@@ -632,6 +924,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
             ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("pedigree", (None, '')),
             ("pedigree", (None, 'Grand-Popa')),
@@ -668,6 +963,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
             ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("pedigree", (None, 'Moman')),
             ("pedigree", (None, 'Grand-Popa')),
@@ -715,6 +1013,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
             ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("pedigree", (None, 'Moman')),
             ("pedigree", (None, 'Grand-Popa')),
@@ -759,7 +1060,10 @@ class StallionsTest(unittest.TestCase):
             ("production_breeds", (None, "Camargue")),
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
-            ("prices", (None, '741'))
+            ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, ''))
         )
         response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
@@ -786,7 +1090,10 @@ class StallionsTest(unittest.TestCase):
             ("production_breeds", (None, "Camargue")),
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
-            ("prices", (None, '741'))
+            ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, ''))
         )
         response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
         self.assertEqual(response.status_code, 422)
@@ -813,7 +1120,10 @@ class StallionsTest(unittest.TestCase):
             ("production_breeds", (None, "Camargue")),
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'là')),
-            ("prices", (None, '741'))
+            ("prices", (None, '741')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, ''))
         )
         response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
         self.assertEqual(response.status_code, 422)
@@ -838,6 +1148,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -881,6 +1194,9 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_places", (None, 'ici')),
             ("prices", (None, '750')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -980,9 +1296,15 @@ class StallionsTest(unittest.TestCase):
             ("cover_types", (None, 'iai')),
             ("cover_types", (None, 'iac')),
             ("cover_places", (None, 'ici')),
-            ("cover_places", (None, 'là')),
+            ("cover_places", (None, '')),
             ("prices", (None, '750')),
             ("prices", (None, '1278')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, 'seller')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -1016,6 +1338,12 @@ class StallionsTest(unittest.TestCase):
             ("cover_places", (None, 'là2')),
             ("prices", (None, '425')),
             ("prices", (None, '570')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
+            ('balance_payment_conditions', (None, 'living_foal_48')),
+            ('advance_percentages', (None, '50')),
+            ('left_straws_owners', (None, '')),
             ("pedigree", (None, 'Popa')),
             ("cover_additional_info", (None, "cover additional info")),
             ("performance", (None, "perf")),
@@ -1026,6 +1354,8 @@ class StallionsTest(unittest.TestCase):
 
         response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
+
+        fake_db.stallions.update_many({}, {"$set": {"searchable": True}})
 
         # with page <= 0
         response = client.get('/stallions/search?page=0&limit=16')
@@ -1146,6 +1476,39 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
         self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
 
+        # when min > max
+        response = client.get('/stallions/search?page=1&limit=16&min_price=1230&max_price=1177')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["content"]), 0)
+
+        # mix min and max
+        response = client.get('/stallions/search?page=1&limit=16&min_price=560&max_price=1277')
+        self.assertEqual(response.status_code, 200)
+
+        pricing_config = pricing_utils.load_config()
+        self.assertEqual(len(response.json()["content"]), 2)
+
+        content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
+
+        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(570, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
+
+        # when min height too high
+        response = client.get('/stallions/search?page=1&limit=16&min_height=180')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["content"]), 0)
+
+        # only one height matches
+        response = client.get('/stallions/search?page=1&limit=16&min_height=160&max_height=175')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["content"]), 1)
+        self.assertEqual(response.json()["content"][0]["name"], "Joris")
+
+        # two heights match
+        response = client.get('/stallions/search?page=1&limit=16&min_height=160&max_height=182')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["content"]), 2)
+
         # both breeds
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe')
         self.assertEqual(response.status_code, 200)
@@ -1224,52 +1587,8 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
 
-        # both colors
-        response = client.get('/stallions/search?page=1&limit=16&colors=Bai&colors=Blanc')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 2)
-
-        content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
-
-        self.assertEqual(len(content_sorted_on_name), 2)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
-
-        # one color
-        response = client.get('/stallions/search?page=1&limit=16&colors=Blanc')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["name"], "Bertrand")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(425, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
-
-        response = client.get('/stallions/search?page=1&limit=16&colors=Bai')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["name"], "Joris")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(750, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
-
-        # among other colors
-        response = client.get('/stallions/search?page=1&limit=16&colors=Bai&colors=Noir')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["name"], "Joris")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(750, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
-
-        # testing 422 colors
-        response = client.get('/stallions/search?page=1&limit=16&colors=doesnotexist')
-        self.assertEqual(response.status_code, 422)
-
-        response = client.get('/stallions/search?page=1&limit=16&colors=bonjour&colors=Bai')
-        self.assertEqual(response.status_code, 422)
-
-        # price, breed, production_breeds and colors
-        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&colors=Blanc')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
-
         # cover_type
-        response = client.get('/stallions/search?page=1&limit=16&cover_types=hand&cover_types=iarp')
+        response = client.get('/stallions/search?page=1&limit=16&cover_types=hand&cover_types=iart')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["name"], "Bertrand")
@@ -1282,19 +1601,19 @@ class StallionsTest(unittest.TestCase):
         response = client.get('/stallions/search?page=1&limit=16&cover_types=bonjour&cover_types=lib')
         self.assertEqual(response.status_code, 422)
 
-        # price, breed, production_breeds, colors and cover_types with 0 result bcs the price of the cover type asked is too high
-        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&colors=Blanc&cover_types=lib')
+        # price, breed, production_breeds and cover_types with 0 result bcs the price of the cover type asked is too high
+        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&cover_types=lib')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 0)
 
-        # price, breed, production_breeds, colors and cover_types
-        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&colors=Blanc&cover_types=hand')
+        # price, breed, production_breeds and cover_types
+        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&cover_types=hand')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total)
 
-        # testing 422 when price, breed, production_breeds, colors and cover_types
-        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&colors=Blanc&cover_types=hand&cover_types=doesnotexist')
+        # testing 422 when price, breed, production_breeds and cover_types
+        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&cover_types=hand&cover_types=doesnotexist')
         self.assertEqual(response.status_code, 422)
 
         # distance
