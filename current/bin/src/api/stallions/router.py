@@ -301,9 +301,6 @@ async def register_new_stallion(
             "data": await uploadfile_obj.read()
         } 
         photos_f.append(p)
-    
-    if color not in config['colors']:
-        raise HTTPException(status_code=422, detail='color is not available')
 
     try:
         birthdate_datetime = datetime.strptime(birthdate, "%d/%m/%Y")
@@ -348,7 +345,7 @@ async def register_new_stallion(
             raise HTTPException(status_code=422, detail="unknown cover type")
         
         if cover_type in config["cover_types_for_which_cover_place_has_to_be_offered"]:
-            if cover_place != "" or left_straws_owner not in ["seller"," buyer"]:
+            if cover_place != "" or left_straws_owner not in ["seller", "buyer"]:
                 raise HTTPException(status_code=422, detail="invalid cover_place or left_straws_owner params")
         else:
             if cover_place == "" or left_straws_owner != "":
