@@ -57,7 +57,7 @@ async def register(user: schemas.RegisterQuery, db = Depends(get_db)):
         )
 
         try:
-            db.users.insert_one(user_to_create.dict())
+            db.users.insert_one(user_to_create.model_dump())
 
         except Exception as exc:
             logger.error(f'failed to write db: {traceback.format_exc()}')
@@ -151,10 +151,10 @@ async def get_user(current_user = Depends(get_current_user)):
         lastname=current_user['lastname']
     )
 
-@router.get('/profile-information', response_model=schemas.GetProfileInformation)
-async def get_profile_information(current_user = Depends(get_current_user)):
+@router.get('/contracts-identity', response_model=schemas.GetContractsIdentity)
+async def get_contract_identity(current_user = Depends(get_current_user)):
     try:
-        return schemas.GetProfileInformation(
+        return schemas.GetContractsIdentity(
             type=current_user['contract_identity']['type'],
             company_name=current_user['contract_identity']['company_name'],
             company_status=current_user['contract_identity']['company_status'],
@@ -170,7 +170,7 @@ async def get_profile_information(current_user = Depends(get_current_user)):
 
     except Exception:
         try:
-            return schemas.GetProfileInformation(
+            return schemas.GetContractsIdentity(
                 type=current_user['contract_identity']['type'],
                 postal_address=current_user['contract_identity']['postal_address'],
                 birthdate=current_user['contract_identity']['birthdate'],
@@ -181,8 +181,8 @@ async def get_profile_information(current_user = Depends(get_current_user)):
         except Exception as exc:
             raise HTTPException(status_code=404, detail='profile information not found') from exc
 
-@router.put('/profile-information')
-async def put_profile_information(query: schemas.PutProfileInformationQuery, current_user = Depends(get_current_user), db = Depends(get_db)):    
+@router.put('/contracts-identity')
+async def put_contracts_identity(query: schemas.PutContractsIdentityQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
     try:
         update = {
                 '$set': {

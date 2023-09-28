@@ -8,7 +8,7 @@ cover_types:
   - iart
   - iac
 
-cover_types_for_which_cover_place_has_to_be_offered:
+cover_types_for_which_cover_place_has_to_be_provided:
   - iart
   - iac
 

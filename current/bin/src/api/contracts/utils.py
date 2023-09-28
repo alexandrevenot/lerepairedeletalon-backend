@@ -86,6 +86,8 @@ async def create_and_send_contract(
     signature_request_delivery_method: str,
     signed_document_delivery_method: str,
     required_identification_methods: list[str],
+    frontend_url: str,
+    esignatures_contracts_api_url: str,
     token: str
 ):
 
@@ -101,7 +103,7 @@ async def create_and_send_contract(
     buyer_signer_dict["signature_request_delivery_method"] = signature_request_delivery_method
     buyer_signer_dict["signed_document_delivery_method"] = signed_document_delivery_method
     buyer_signer_dict["required_identification_methods"] = required_identification_methods
-    buyer_signer_dict["redirect_url"] = f"http://localhost:4200/dashboard?coverId={str(cover_document['_id'])}"
+    buyer_signer_dict["redirect_url"] = f"{frontend_url}/dashboard?coverId={str(cover_document['_id'])}"
     signers.append(buyer_signer_dict)
 
     seller_signer_dict = {}
@@ -114,7 +116,7 @@ async def create_and_send_contract(
     seller_signer_dict["signature_request_delivery_method"] = signature_request_delivery_method
     seller_signer_dict["signed_document_delivery_method"] = signed_document_delivery_method
     seller_signer_dict["required_identification_methods"] = required_identification_methods
-    seller_signer_dict["redirect_url"] = f"http://localhost:4200/dashboard?coverId={str(cover_document['_id'])}"
+    seller_signer_dict["redirect_url"] = f"{frontend_url}/dashboard?coverId={str(cover_document['_id'])}"
     signers.append(seller_signer_dict)
 
     placeholder_fields = []
@@ -180,14 +182,14 @@ async def create_and_send_contract(
     })
 
     advance = pricing_utils.calculate_checkout(
-        cover_document["advance"],
-        cover_document["buyer_fees"],
+        cover_document["advance_subtotal"],
+        cover_document["advance_buyer_fees_ht"],
         pricing_config["TVA_coeff_HT"]
     ).total
 
     balance = pricing_utils.calculate_checkout(
-        cover_document["balance"],
-        cover_document["buyer_fees"],
+        cover_document["balance_subtotal"],
+        cover_document["balance_buyer_fees_ht"],
         pricing_config["TVA_coeff_HT"]
     ).total
 
@@ -217,7 +219,6 @@ async def create_and_send_contract(
         "title": "Contrat de saillie",
         "locale": "fr",
         "expires_in_hours": expires_in_hours,
-        #"custom_webhook_url": "https://lerepairedeletalon.fr/esignaturesio-custom-webhook",
         "labels": [cover_document["cover_type"].upper()],
         "signers": signers,
         "placeholder_fields": placeholder_fields,
@@ -230,9 +231,9 @@ async def create_and_send_contract(
     }
 
     async with aiohttp.ClientSession() as session:
-        url = f"https://esignatures.io/api/contracts?token={token}"
+        url = f"{esignatures_contracts_api_url}?token={token}"
         async with session.post(url, json=data) as response:
-            json = await response.json()
-            assert response.status == 200, f"POST on https://esignatures.io/api/contracts?token={token} : received status {response.status} with json {json}"
+            json_to_return = await response.json()
+            assert response.status == 200, f"POST on {esignatures_contracts_api_url}?token={token} : received status {response.status} with json {json_to_return}"
 
-            return json
+            return json_to_return, data

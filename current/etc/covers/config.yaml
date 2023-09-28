@@ -1,5 +1,5 @@
 status:
-  - offered
+  - requested
   - approved
   - signingstarted
   - buyersigned
@@ -9,7 +9,7 @@ status:
 
 groups:
   pendingApproval:
-    - offered
+    - requested
     - approved
   pendingSignature:
     - signingstarted

@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 from typing import Annotated
 from datetime import datetime
 
+from pydantic import conint
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Query
 from fastapi.responses import Response
 
@@ -42,8 +43,8 @@ router = APIRouter(prefix='/stallions')
 async def search(
     page: int,
     limit: int,
-    min_price: float = None,
-    max_price: float = None,
+    min_price: int = None,
+    max_price: int = None,
     min_height: int = None,
     max_height: int = None,
     lat: float = None,
@@ -83,11 +84,11 @@ async def search(
     # price
     price_query = {}
     if min_price is not None:
-        min_price = pricing_utils.calculate_real_min_price(min_price, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT'])
+        min_price = pricing_utils.calculate_corresponding_subtotal(min_price, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'], pricing_config['TVA_coeff_HT'])
         price_query["$gte"] = min_price
 
     if max_price is not None:
-        max_price = pricing_utils.calculate_real_max_price(max_price, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT'])
+        max_price = pricing_utils.calculate_corresponding_subtotal(max_price, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'], pricing_config['TVA_coeff_HT'])
         price_query["$lte"] = max_price
 
     if price_query:
@@ -270,7 +271,7 @@ async def register_new_stallion(
     cover_places: Annotated[list[str], Form()],
     prices: Annotated[list[int], Form()],
     balance_payment_conditions: Annotated[list[str], Form()],
-    advance_percentages: Annotated[list[int], Form(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])],
+    advance_percentages: Annotated[list[conint(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])], Form()],
     left_straws_owners: Annotated[list[str], Form()],
     pedigree: Annotated[list[str], Form()] = None,
     cover_additional_info: Annotated[str, Form()] = "",
@@ -344,7 +345,7 @@ async def register_new_stallion(
         if cover_type not in config["cover_types"]:
             raise HTTPException(status_code=422, detail="unknown cover type")
         
-        if cover_type in config["cover_types_for_which_cover_place_has_to_be_offered"]:
+        if cover_type in config["cover_types_for_which_cover_place_has_to_be_provided"]:
             if cover_place != "" or left_straws_owner not in ["seller", "buyer"]:
                 raise HTTPException(status_code=422, detail="invalid cover_place or left_straws_owner params")
         else:

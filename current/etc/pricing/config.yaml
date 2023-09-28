@@ -1,3 +1,5 @@
-TVA_coeff_HT: 0.2 # TVA à payer = prix HT * TVA_coeff_HT
-buyer_fees: 0.06 # Frais de service pour l'acheteur = prix TTC de la saillie (celui entré par l'utilisateur) * buyer_fees
-seller_fees: 0.06
+TVA_coeff_HT: 0.2
+buyer_fees_coeff: 0.06
+buyer_fees_offset: 0.0
+seller_fees_coeff: 0.06
+seller_fees_offset: 0.0

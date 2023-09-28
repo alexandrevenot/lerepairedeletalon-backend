@@ -1,6 +1,6 @@
 from bson.objectid import ObjectId
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from fastapi import HTTPException
 
 import src.api.stallions.utils as stallions_utils
@@ -15,28 +15,40 @@ class CoverQuery(BaseModel):
     mare_breed: str
     message: str
     cover_type: str
-    offered_cover_place: str = ""
+    provided_cover_place: str = ""
 
-    @validator('seller_id')
+    @field_validator('seller_id')
+    @classmethod
     def seller_id_validator(cls, v):
         try:
-            return ObjectId(v)
+            _ = ObjectId(v)
+            return v
         except Exception as exc:
             raise HTTPException(status_code=422, detail="seller_id is not readable") from exc
     
-    @validator('cover_type')
+    @field_validator('cover_type')
+    @classmethod
     def cover_type_validator(cls, v):
         if v not in stallions_config["cover_types"]:
             raise HTTPException(status_code=422, detail="cover type not allowed")
         return v
 
-class StepForwardCoverQuery(BaseModel):
+    @field_validator('mare_breed')
+    @classmethod
+    def mare_breed_validator(cls, v):
+        if v not in stallions_config["breeds"]:
+            raise HTTPException(status_code=422, detail="mare breed not allowed")
+        return v
+
+class ApproveRequestedCoverQuery(BaseModel):
     cover_id: str
 
-    @validator('cover_id')
+    @field_validator('cover_id')
+    @classmethod
     def cover_id_validator(cls, v):
         try:
-            return ObjectId(v)
+            _ = ObjectId(v)
+            return v
         except Exception as exc:
             raise HTTPException(status_code=422, detail="cover_id is not readable") from exc
 
@@ -74,10 +86,12 @@ class UpdateNotesQuery(BaseModel):
     cover_id: str
     notes: str
 
-    @validator('cover_id')
+    @field_validator('cover_id')
+    @classmethod
     def cover_id_validator(cls, v):
         try:
-            return ObjectId(v)
+            _ = ObjectId(v)
+            return v
         except Exception as exc:
             raise HTTPException(status_code=422, detail="cover_id is not readable") from exc
 
@@ -87,9 +101,11 @@ class StepForwardSignatureQuery(BaseModel):
 class StepForwardPaymentQuery(BaseModel):
     cover_id: str
 
-    @validator('cover_id')
+    @field_validator('cover_id')
+    @classmethod
     def cover_id_validator(cls, v):
         try:
-            return ObjectId(v)
+            _ = ObjectId(v)
+            return v
         except Exception as exc:
             raise HTTPException(status_code=422, detail="cover_id is not readable") from exc

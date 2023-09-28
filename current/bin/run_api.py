@@ -29,7 +29,7 @@ server.include_router(contracts_router.router)
 
 origins = [
     "http://localhost:4200",
-    "http://localhost:3002"
+    "https://esignatures.io"
 ]
 
 server.add_middleware(
