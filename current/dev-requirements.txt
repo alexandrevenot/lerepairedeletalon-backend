@@ -1,2 +1,3 @@
 mongomock
 httpx
+aioresponses

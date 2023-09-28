@@ -117,12 +117,12 @@ class AuthTest(unittest.TestCase):
         response = client.get("/auth/user-name", headers={"Authorization": "ounga bounga"})
         self.assertEqual(response.status_code, 401)
 
-        # look for profile information when it has not been created yet
-        response = client.get('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"})
+        # look for contracts identity when it has not been created yet
+        response = client.get('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"})
         self.assertEqual(response.status_code, 404)
 
-        # try to put profile information but bad date format
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"},
+        # try to put contracts identity but bad date format
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"},
                               json={
                                   "type": "individual",
                                   "gender": "Monsieur",
@@ -133,8 +133,8 @@ class AuthTest(unittest.TestCase):
                               })
         self.assertEqual(response.status_code, 422)
 
-        # try to put profile information but incomplete body
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"},
+        # try to put contracts identity but incomplete body
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"},
                               json={
                                   "type": "individual",
                                   "gender": "Monsieur",
@@ -144,11 +144,11 @@ class AuthTest(unittest.TestCase):
                               })
         self.assertEqual(response.status_code, 422)
 
-        # try to get profile information when it does not exist because precedent tries failed
-        response = client.get('/auth/profile-information',  headers={"Authorization": f"Bearer {access_token}"})
+        # try to get contracts identity when it does not exist because precedent tries failed
+        response = client.get('/auth/contracts-identity',  headers={"Authorization": f"Bearer {access_token}"})
         self.assertEqual(response.status_code, 404)
 
-        # put profile information when the body is right
+        # put contracts identity when the body is right
         working_json = {
             "type": "individual",
             "gender": "Monsieur",
@@ -157,7 +157,7 @@ class AuthTest(unittest.TestCase):
             "birthplace": "Là",
             "citizenship": "Fr eheh"
         }
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"}, json=working_json)
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"}, json=working_json)
         self.assertEqual(response.status_code, 200)
 
         # check that it is in db
@@ -167,14 +167,14 @@ class AuthTest(unittest.TestCase):
             self.assertTrue(field not in user_in_db["contract_identity"])
 
         # check that it can be obtained with the GET route aswell
-        response = client.get('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"})
+        response = client.get('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"})
         self.assertEqual(response.status_code, 200)
 
         for key, value in working_json.items():
             self.assertEqual(value, user_in_db["contract_identity"][key])
 
-        # update profile info with incomplete company info
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"},
+        # update contracts identity with incomplete company info
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"},
                               json={
                                   "type": "company",
                                   "gender": "Monsieur",
@@ -185,8 +185,8 @@ class AuthTest(unittest.TestCase):
                               })
         self.assertEqual(response.status_code, 422)
 
-        # update profile info with less but still incomplete company info
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"},
+        # update contracts identity with less but still incomplete company info
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"},
                               json={
                                   "type": "company",
                                   "gender": "Monsieur",
@@ -201,7 +201,7 @@ class AuthTest(unittest.TestCase):
                               })
         self.assertEqual(response.status_code, 422)
 
-        # update profile info with complete company info
+        # update contracts identity with complete company info
         working_json = {
             "type": "company",
             "gender": "Monsieur",
@@ -216,7 +216,7 @@ class AuthTest(unittest.TestCase):
             "siret": "AYIHBYIUN"
             
         }
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"}, json=working_json)
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"}, json=working_json)
         self.assertEqual(response.status_code, 200)
         
         # check that it appears in db
@@ -228,7 +228,7 @@ class AuthTest(unittest.TestCase):
         self.assertEqual(user_in_db["contract_identity"]["postal_address"], "Whatever 2")
         self.assertEqual(user_in_db["contract_identity"]["siret"], "AYIHBYIUN")
 
-        # put back individual profile info
+        # put back individual contracts identity
         working_json = {
             "type": "individual",
             "gender": "Madame",
@@ -237,7 +237,7 @@ class AuthTest(unittest.TestCase):
             "birthplace": "Ici",
             "citizenship": "Pas fr meh"
         }
-        response = client.put('/auth/profile-information', headers={"Authorization": f"Bearer {access_token}"}, json=working_json)
+        response = client.put('/auth/contracts-identity', headers={"Authorization": f"Bearer {access_token}"}, json=working_json)
         self.assertEqual(response.status_code, 200)
 
         # check that it is in db and that no more company info is left

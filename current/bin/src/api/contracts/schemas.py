@@ -1,17 +1,8 @@
-from bson.objectid import ObjectId
-
-from pydantic import BaseModel, validator
-from fastapi import HTTPException
-
-class SignContract(BaseModel):
-    cover_id: str
-
-    @validator('cover_id')
-    def cover_id_validator(cls, v):
-        try:
-            return ObjectId(v)
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail="cover_id is not readable") from exc
+from pydantic import BaseModel
 
 class GetSignPageUrl(BaseModel):
     url: str
+
+class ContractWebhookBody(BaseModel):
+    status: str
+    data: dict

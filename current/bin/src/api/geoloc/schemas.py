@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 class CityRM(BaseModel):
-    city_name: str
+    city: str
     postal_code: str
     lat: float
     lng: float

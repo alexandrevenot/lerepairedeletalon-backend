@@ -32,7 +32,8 @@ def get_displayed_price(document: dict, min_price: float, max_price: float) -> f
     else:
         value = min([elt["price"] for elt in document["prices"] if elt["price"] >= min_price and elt["price"] <= max_price])
 
-    return pricing_utils.calculate_checkout(value, pricing_config['buyer_fees'], pricing_config['TVA_coeff_HT']).total
+    buyer_fees_ht = pricing_utils.calculate_fees_ht(value, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'])
+    return pricing_utils.calculate_checkout(value, buyer_fees_ht, pricing_config['TVA_coeff_HT']).total
 
 def calculate_age(birthdate: datetime) -> int:
     today = date.today()
