@@ -58,7 +58,7 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db)):
         logger.error(f'failed to create and fill up contract: {traceback.format_exc()}')
         raise HTTPException(status_code=422, detail="failed to create and fill up contract") from exc
 
-    await covers_router.step_forward_cover(cover_in_db["_id"], db)
+    await covers_router.step_forward_cover(cover_in_db, "signingstarted", db)
 
     try:
         assert returned_json["data"]["contract"]["signers"][0]["email"] == buyer_in_db["email"]
@@ -82,28 +82,14 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db)):
         logger.error(f'failed to read db: {traceback.format_exc()}')
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-@router.get('/sign-page-url')
-async def get_sign_page_url(cover_id: str, current_user = Depends(get_current_user), db = Depends(get_db)):
-    try:
-        cover_id = ObjectId(cover_id)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="unprocessable cover_id") from exc
-
-    try:
-        cover_in_db = db.covers.find_one({"_id": cover_id})
-    except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
-        raise HTTPException(status_code=500, detail="failed to read db") from exc
-    
-    if cover_in_db is None:
-        raise HTTPException(status_code=404, detail="cover not found")
-    
+@router.get('/sign-page-url/{cover_id}')
+async def get_sign_page_url(cover_in_db = Depends(covers_router.get_cover_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
     if current_user['_id'] == cover_in_db["seller_id"]:
         pov = "seller"
     elif current_user['_id'] == cover_in_db["buyer_id"]:
         pov = "buyer"
     else:
-        raise HTTPException(status_code=401, detail="only seller and buyer can get sign page url")
+        raise HTTPException(status_code=403, detail="only seller and buyer can get sign page url")
 
     if (pov == "buyer" and cover_in_db["status"] not in ["approved", "signingstarted"]) \
     or (pov == "seller" and cover_in_db["status"] != "buyersigned"):
@@ -142,9 +128,10 @@ async def manage_esignatures_wehbooks(query: schemas.ContractWebhookBody, author
     if cover_in_db is None:
         logger.error(f'Received webhook with signer-signed status but no cover found associated to contract_id {contract_id}')
         raise HTTPException(status_code=500, detail="cover not found")
-    
-    if (cover_in_db["status"] == "signingstarted" and signing_order == "1") \
-    or (cover_in_db["status"] == "buyersigned" and signing_order == "2"):
-        await covers_router.step_forward_cover(cover_in_db["_id"], db)
+
+    if cover_in_db["status"] == "signingstarted" and signing_order == "1":
+        await covers_router.step_forward_cover(cover_in_db, "buyersigned", db)
+    elif cover_in_db["status"] == "buyersigned" and signing_order == "2":
+        await covers_router.step_forward_cover(cover_in_db, "sellersigned", db)
 
     return {"message": "successfully received webhook"}

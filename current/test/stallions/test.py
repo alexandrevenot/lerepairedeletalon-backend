@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+import datetime
 
 from fastapi import FastAPI
 from bson.objectid import ObjectId
@@ -53,1310 +54,657 @@ class StallionsTest(unittest.TestCase):
 
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        # without token
-        response = client.post('/stallions/register-new-stallion')
-        self.assertEqual(response.status_code, 401)
+        body = {}
 
-        # with uncomplete data
-        response = client.post('/stallions/register-new-stallion', headers=headers)
-        self.assertEqual(response.status_code, 422)
+        body["final_fields_body"] = {
+            "name": "Michel du Rouet",
+            "breed": "Selle Français",
+            "n_sire": "8461684685X",
+            "birthdate": "28/10/1998"
+        }
 
-        self.cs = open('/lerepairedeletalon/server/current/test/stallions/carnetdesaillie.png', 'rb')
+        body["editable_fields_body"] = {
+            "main_desc": "desc",
+            "color": "Bai tâcheté",
+            "height": 170.5,
+            "lat": 0.1,
+            "lng": 0.6,
+            "city": "Toulouse",
+            "postal_code": "31000",
+            "production_breeds": [
+                "Selle Français"
+            ],
+            "cover_specs": {
+                "iai": {
+                    "price": 750,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "cover_place": "ici",
+                    "maximum_nb_of_attempts": 3,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 6
+                        }
+                    }
+                }
+            },
+            "pedigree": [
+                "Popa"
+                ],
+            "pedigree_po": "pedigree po",
+            "cover_additional_info": "cover additional info",
+            "performance": "perf",
+            "stallion_additional_info": "stallion additional info",
+            "offspring": "the offspring",
+            "crossbreeding_advice": "que des juments cools",
+            "stallion_std_negative_tests": {
+                "metrite": {
+                    "test_date": "08/10/2023"
+                },
+                "arterite": {
+                    "test_date": "08/10/2023"
+                }
+            },
+            "stallion_vaccines": [
+                "rhino"
+            ]
+        }
+
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+
+        self.assertEqual(response.status_code, 200)
+
+        stallion_id = response.json()["stallion_id"]
+
+        self.vf = open('/lerepairedeletalon/server/current/test/stallions/verification_file.png', 'rb')
         self.ph = open('/lerepairedeletalon/server/current/test/stallions/sellefrançais.jpg', 'rb')
+
         files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.7")),
-            ("lng", (None, "0.1")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
 
-        # complete data
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
-        stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
-        self.assertTrue(stallion_in_db is not None)
 
-        for field in [
-            "c_saillies",
-            "photos",
-            "name",
-            "breed",
-            "n_sire",
-            "main_desc",
-            "color",
-            "height",
-            "birthdate",
-            "location",
-            "city",
-            "postal_code",
-            "production_breeds",
-            "prices",
-            "pedigree",
-            "cover_additional_info",
-            "performance",
-            "pedigree_po",
-            "stallion_additional_info",
-            "offspring",
-            "owner"
-        ]:
-            self.assertTrue(field in stallion_in_db)
-        
-        self.assertTrue(isinstance(stallion_in_db["owner"], ObjectId))
-        self.assertEqual(str(stallion_in_db["owner"]), str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"]))
-
-        self.assertEqual(stallion_in_db["prices"][0]["cover_type"], "iai")
-        self.assertEqual(stallion_in_db["prices"][0]["cover_place"], "ici")
-        self.assertEqual(stallion_in_db["prices"][0]["price"], 750)
-
-        self.assertEqual(stallion_in_db["location"]["type"], "Point")
-        self.assertEqual(stallion_in_db["location"]["coordinates"][0], 0.1)
-        self.assertEqual(stallion_in_db["location"]["coordinates"][1], 0.7)
-
-        self.assertFalse(stallion_in_db["searchable"])
-
-        # already existing n_sire in db
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 400)
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # unavailable breed
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "???")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "0.0")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # height that cannot be read as float
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "???")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "0.0")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # unparsable birthdate
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "???")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "0.0")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when lat is not a float
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "???")),
-            ("lng", (None, "0.0")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when lng is an int
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # when one of the production breeds does not exist
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "???")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when there are many production breeds
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # when there are many production breeds but one of them does not exist
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "???")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # many times the same production breed
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # unexisting cover type
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'wtf')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # cover parameters different lengths
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_types", (None, 'iac')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # consistent length in cover places, types and prices, but twice the same cover type
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '750')),
-            ("prices", (None, '840')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # cover price when its not readable as int
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '0.7')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when balance_payment_condition is not part of those required
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'wtf')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when advance_percentage is > authorized values
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, str(config["advance_max_percentage_value"] + 1))),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when advance_percentage is < authorized values
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, str(config["advance_min_percentage_value"] - 1))),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when left_straws_owner not empty but iai
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, 'seller')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when cover_place empty but iai
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, '')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when cover_place not empty but iac
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iac')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, 'seller')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # when left_straws_owner empty but iac
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iac')),
-            ("cover_places", (None, '')),
-            ("prices", (None, '0.0')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # empty pedigree
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
-        self.assertEqual(stallion_in_db["pedigree"], [""] * 14)
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # not full pedigree
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("pedigree", (None, 'Moman')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
-        self.assertEqual(stallion_in_db["pedigree"], ["Popa", "Moman", "Grand-Popa"] + ["" for _ in range(11)])
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # not full pedigree with spaces
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("pedigree", (None, '')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
-        self.assertEqual(stallion_in_db["pedigree"], ["Popa", "", "Grand-Popa"] + ["" for _ in range(11)])
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # full pedigree
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("pedigree", (None, 'Moman')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
-        self.assertEqual(stallion_in_db["pedigree"], ["Popa", "Moman"] + ["Grand-Popa"]*12)
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # full pedigree
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("pedigree", (None, 'Moman')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'Grand-Popa')),
-            ("pedigree", (None, 'La goutte de trop')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # with empty optionnal fields
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, ''))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        fake_db.stallions.delete_one({"name": "Michel du Rouet"})
-
-        # with a c_saillies that is too large
-        self.cstl = open('/lerepairedeletalon/server/current/test/stallions/c_saillies_too_large.pdf', 'rb')
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cstl, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, ''))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # with a photo that is too large
-        self.phtl = open('/lerepairedeletalon/server/current/test/stallions/photo_too_large.jpg', 'rb')
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo3.jpg", self.phtl, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.0")),
-            ("lng", (None, "7")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("production_breeds", (None, "Camargue")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'là')),
-            ("prices", (None, '741')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, ''))
-        )
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
-
-        # add a stallion for the other tests
-        files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.7")),
-            ("lng", (None, "0.1")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
-        )
-
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
-
-        # testing my-stallions
         response = client.get('/stallions/my-stallions', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(str(response.json()["content"][0]["id"]), str(stallion_in_db["_id"]))
+        self.assertEqual(str(response.json()["content"][0]["id"]), stallion_id)
         self.assertEqual(str(response.json()["content"][0]["name"]), "Michel du Rouet")
         self.assertEqual(str(response.json()["content"][0]["breed"]), "Selle Français")
+        stallion_in_db = fake_db.stallions.find_one({"_id": ObjectId(stallion_id)})
         self.assertEqual(str(response.json()["content"][0]["photoId"]), str(stallion_in_db["photos"][0]))
         self.assertFalse(response.json()["content"][0]["searchable"])
         self.assertEqual(len(response.json()["content"][0].keys()), 5)
 
-        # adding a second stallion
+        fake_db.stallions.update_one({"_id": ObjectId(stallion_id)}, {"$set": {"searchable": True}})
+
+        response = client.get(f'/stallions/stallion/{stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        content = response.json()
+
+        owner_id = str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"])
+        self.assertEqual(content["owner"], owner_id)
+        self.assertEqual(content["name"], "Michel du Rouet")
+        self.assertEqual(content["breed"], "Selle Français")
+        self.assertEqual(content["n_sire"], "8461684685X")
+        self.assertEqual(content["age"], stallions_utils.calculate_age(datetime.datetime.strptime("28/10/1998","%d/%m/%Y")))
+        self.assertEqual(content["main_desc"], "desc")
+        self.assertEqual(content["color"], "Bai tâcheté")
+        self.assertEqual(content["height"], 170.5)
+        self.assertEqual(content["city"], "Toulouse")
+        self.assertEqual(content["dep_name"], "Haute-Garonne")
+        self.assertEqual(content["reg_name"], "Occitanie")
+        self.assertEqual(content["production_breeds"], ["Selle Français"])
+        self.assertEqual(content["cover_specs"]["iai"]["price"], 750)
+        self.assertEqual(content["cover_specs"]["iai"]["balance_payment_condition"], "living_foal_48")
+        self.assertEqual(content["cover_specs"]["iai"]["advance_percentage"], 50)
+        self.assertEqual(content["cover_specs"]["iai"]["cover_place"], "ici")
+        self.assertEqual(content["cover_specs"]["iai"]["maximum_nb_of_attempts"], 3)
+        self.assertEqual(content["cover_specs"]["iai"]["hosting_specs"]["meadow"]["price"], 6)
+        self.assertEqual(content["pedigree"], ['Popa'] + ['']*13)
+        self.assertEqual(content["pedigree_po"], "pedigree po")
+        self.assertEqual(content["cover_additional_info"], "cover additional info")
+        self.assertEqual(content["performance"], "perf")
+        self.assertEqual(content["stallion_additional_info"], "stallion additional info")
+        self.assertEqual(content["offspring"], "the offspring")
+        self.assertEqual(content["crossbreeding_advice"], "que des juments cools")
+        self.assertEqual(content["stallion_std_negative_tests"]["metrite"]['test_date'], "08/10/2023")
+        self.assertEqual(content["stallion_std_negative_tests"]["arterite"]['test_date'], "08/10/2023")
+        self.assertEqual(content["stallion_vaccines"], [
+                "rhino"
+            ])
+
+
+        body = {
+            "main_desc": "other desc",
+            "color": "Bai plus tâcheté",
+            "height": 171,
+            "lat": 0.1,
+            "lng": 0.7,
+            "city": "Rodez",
+            "postal_code": "12000",
+            "production_breeds": [
+                "Selle Français",
+                "Boulonnais"
+            ],
+            "cover_specs": {
+                "iai": {
+                    "price": 780,
+                    "balance_payment_condition": "living_foal",
+                    "advance_percentage": 40,
+                    "cover_place": "là",
+                    "maximum_nb_of_attempts": 4,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 7
+                        }
+                    }
+                }
+            },
+            "pedigree": [
+                "Popa",
+                "Moman"
+                ],
+            "cover_additional_info": "other cover additional info",
+            "performance": "other perf",
+            "pedigree_po": "other pedigree po",
+            "stallion_additional_info": "other stallion additional info",
+            "offspring": "other the offspring",
+            "crossbreeding_advice": "other que des juments cools",
+            "stallion_std_negative_tests": {
+                "metrite": {
+                    "test_date": "08/10/2023"
+                },
+                "arterite": {
+                    "test_date": "08/10/2023"
+                },
+                "anemie": {
+                    "test_date": "08/10/2023"
+                }
+            },
+            "stallion_vaccines": [
+                "rhino",
+                "grippe"
+            ]
+        }
+
+        response = client.put(f'/stallions/stallion/{stallion_id}', json=body, headers=headers)
+        self.assertEqual(response.status_code, 200)
+
         files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Joris")),
-            ("breed", (None, "Boulonnais")),
-            ("n_sire", (None, "65234871X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.7")),
-            ("lng", (None, "0.1")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iai')),
-            ("cover_places", (None, 'ici')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
 
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        response = client.put(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
-        second_stallion_in_db = fake_db.stallions.find_one({"name": "Joris"})
 
-        response = client.get('/stallions/my-stallions', headers=headers)
+        nb_of_photos_in_db = len([_ for _ in fake_db.stallion_photos.find()])
+        self.assertEqual(nb_of_photos_in_db, 2)
+
+        response = client.get(f'/stallions/stallion/{stallion_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 2)
-        self.assertEqual(str(response.json()["content"][0]["id"]), str(stallion_in_db["_id"]))
-        self.assertEqual(str(response.json()["content"][0]["name"]), "Michel du Rouet")
-        self.assertEqual(str(response.json()["content"][0]["breed"]), "Selle Français")
-        self.assertEqual(str(response.json()["content"][0]["photoId"]), str(stallion_in_db["photos"][0]))
-        self.assertFalse(response.json()["content"][0]["searchable"])
-        self.assertEqual(len(response.json()["content"][0].keys()), 5)
-        self.assertEqual(str(response.json()["content"][1]["id"]), str(second_stallion_in_db["_id"]))
-        self.assertEqual(str(response.json()["content"][1]["name"]), "Joris")
-        self.assertEqual(str(response.json()["content"][1]["breed"]), "Boulonnais")
-        self.assertEqual(str(response.json()["content"][1]["photoId"]), str(second_stallion_in_db["photos"][0]))
-        self.assertFalse(response.json()["content"][1]["searchable"])
-        self.assertEqual(len(response.json()["content"][1].keys()), 5)
+        content = response.json()
 
-        # testing stallion-profile-information
-        first_stallion_id = str(stallion_in_db["_id"])
-        second_stallion_id = str(second_stallion_in_db["_id"])
+        owner_id = str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"])
+        self.assertEqual(content["owner"], owner_id)
+        self.assertEqual(content["name"], "Michel du Rouet")
+        self.assertEqual(content["breed"], "Selle Français")
+        self.assertEqual(content["n_sire"], "8461684685X")
+        self.assertEqual(content["age"], stallions_utils.calculate_age(datetime.datetime.strptime("28/10/1998","%d/%m/%Y")))
+        self.assertEqual(content["main_desc"], "other desc")
+        self.assertEqual(content["color"], "Bai plus tâcheté")
+        self.assertEqual(content["height"], 171)
+        self.assertEqual(content["city"], "Rodez")
+        self.assertEqual(content["dep_name"], "Aveyron")
+        self.assertEqual(content["reg_name"], "Occitanie")
+        self.assertEqual(content["production_breeds"], ["Selle Français", "Boulonnais"])
+        self.assertEqual(content["cover_specs"]["iai"]["price"], 780)
+        self.assertEqual(content["cover_specs"]["iai"]["balance_payment_condition"], "living_foal")
+        self.assertEqual(content["cover_specs"]["iai"]["advance_percentage"], 40)
+        self.assertEqual(content["cover_specs"]["iai"]["maximum_nb_of_attempts"], 4)
+        self.assertEqual(content["cover_specs"]["iai"]["cover_place"], "là")
+        self.assertEqual(content["cover_specs"]["iai"]["hosting_specs"]["meadow"]["price"], 7)
+        self.assertEqual(content["pedigree"], ['Popa', 'Moman'] + ['']*12)
+        self.assertEqual(content["pedigree_po"], "other pedigree po")
+        self.assertEqual(content["cover_additional_info"], "other cover additional info")
+        self.assertEqual(content["performance"], "other perf")
+        self.assertEqual(content["stallion_additional_info"], "other stallion additional info")
+        self.assertEqual(content["offspring"], "other the offspring")
+        self.assertEqual(content["crossbreeding_advice"], "other que des juments cools")
+        self.assertEqual(content["stallion_std_negative_tests"]["metrite"]["test_date"], "08/10/2023")
+        self.assertEqual(content["stallion_std_negative_tests"]["arterite"]["test_date"], "08/10/2023")
+        self.assertEqual(content["stallion_std_negative_tests"]["anemie"]["test_date"], "08/10/2023")
+        self.assertEqual(content["stallion_vaccines"], [
+                "rhino",
+                "grippe"
+            ])
 
-        response = client.get(f'/stallions/stallion-profile-information?stallion_id={first_stallion_id}', headers=headers)
-        self.assertEqual(response.status_code, 403)
+        response = client.delete(f'/stallions/stallion/{stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
 
-        fake_db.stallions.update_many(
-            {},
-            {
-                "$set": {
-                    "searchable": True
+        self.assertEqual(0, len([_ for _ in fake_db.stallions.find()]))
+        self.assertEqual(0, len([_ for _ in fake_db.stallion_photos.find()]))
+        self.assertEqual(0, len([_ for _ in fake_db.verification_files.find()]))
+
+        # test invalid bodies for post stallion
+
+        body = {}
+
+        body["final_fields_body"] = {
+            "name": "Michel du Rouet",
+            "breed": "Selle Français",
+            "n_sire": "8461684685X",
+            "birthdate": "2810/1998"
+        }
+
+        body["editable_fields_body"] = {
+            "main_desc": "desc",
+            "color": "Bai tâcheté",
+            "height": 170.5,
+            "lat": 0.1,
+            "lng": 0.6,
+            "city": "Toulouse",
+            "postal_code": "31000",
+            "production_breeds": [
+                "Selle Français"
+            ],
+            "cover_specs": {
+                "iai": {
+                    "price": 750,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "cover_place": "ici",
+                    "maximum_nb_of_attempts": 3,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 6
+                        }
+                    }
+                }
+            },
+            "pedigree": [
+                "Popa"
+                ],
+            "pedigree_po": "pedigree po",
+            "cover_additional_info": "cover additional info",
+            "performance": "perf",
+            "stallion_additional_info": "stallion additional info",
+            "offspring": "the offspring",
+            "crossbreeding_advice": "que des juments cools",
+            "stallion_std_negative_tests": {
+                "metrite": {
+                    "test_date": "08/10/2023"
+                },
+                "arterite": {
+                    "test_date": "08/10/2023"
+                }
+            },
+            "stallion_vaccines": [
+                "rhino"
+            ]
+        }
+
+        # bad birthdate format
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # production breeds duplicated
+        body["final_fields_body"]["birthdate"] = "28/10/1998"
+        body["editable_fields_body"]["production_breeds"] = ["Selle Français", "Selle Français"]
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # cover_specs
+        body["editable_fields_body"]["production_breeds"] = ["Selle Français"]
+        body["editable_fields_body"]["cover_specs"]["iai"] = {
+            "price": 750,
+            "balance_payment_condition": "living_foal_485",
+            "advance_percentage": 50,
+            "cover_place": "ici",
+            "maximum_nb_of_attempts": 3,
+            "hosting_specs": {
+                "meadow": {
+                    "price": 6
                 }
             }
-        )
-        response = client.get(f'/stallions/stallion-profile-information?stallion_id={first_stallion_id}', headers=headers)
-        self.assertEqual(response.status_code, 200)
-        
-        self.assertEqual(response.json()["stallionProfile"]["breed"], "Selle Français")
-        self.assertEqual(response.json()["stallionProfile"]["name"], "Michel du Rouet")
-        self.assertEqual(response.json()["stallionProfile"]["n_sire"], "65123458X")
-        self.assertEqual(response.json()["stallionProfile"]["main_desc"], "desc")
-        self.assertEqual(response.json()["stallionProfile"]["color"], "Bai")
-        self.assertEqual(response.json()["stallionProfile"]["height"], 170)
-        self.assertTrue(isinstance(response.json()["stallionProfile"]["height"], float))
-        self.assertEqual(response.json()["stallionProfile"]["offspring"], "the offspring")
-        self.assertEqual(response.json()["stallionProfile"]["performance"], "perf")
-        self.assertEqual(response.json()["stallionProfile"]["pedigree"], ["Popa"] + 13*[""])
-        self.assertEqual(response.json()["stallionProfile"]["pedigree_po"], "pedigree perfs offspring")
-        self.assertEqual(response.json()["stallionProfile"]["stallion_additional_info"], "stallion additional info")
-        self.assertEqual(response.json()["stallionProfile"]["cover_additional_info"], "cover additional info")
-        self.assertEqual(response.json()["stallionProfile"]["city"], "Toulouse")
-        self.assertEqual(response.json()["stallionProfile"]["postal_code"], "31000")
-        self.assertEqual(response.json()["stallionProfile"]["dep_name"], "Haute-Garonne")
-        self.assertEqual(response.json()["stallionProfile"]["reg_name"], "Occitanie")
-        self.assertEqual(response.json()["stallionProfile"]["breed"], "Selle Français")
-        self.assertEqual(response.json()["stallionProfile"]["production_breeds"], ["Selle Français"])
-        self.assertEqual(response.json()["stallionProfile"]["breed"], "Selle Français")
-        self.assertEqual(response.json()["stallionProfile"]["prices"][0]["cover_type"], "iai")
-        self.assertEqual(response.json()["stallionProfile"]["prices"][0]["cover_place"], "ici")
-        self.assertEqual(response.json()["stallionProfile"]["prices"][0]["price"], 750)
-        self.assertEqual(response.json()["stallionProfile"]["location"]["type"], "Point")
-        self.assertEqual(response.json()["stallionProfile"]["location"]["coordinates"], [0.1, 0.7])
-        self.assertEqual(response.json()["stallionProfile"]["age"], 24)
+        }
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
 
-        response = client.get(f'/stallions/stallion-profile-information?stallion_id={second_stallion_id}', headers=headers)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["stallionProfile"]["breed"], "Boulonnais")
+        # cover_specs
+        body["editable_fields_body"]["cover_specs"]["iai"] = {
+            "price": 750,
+            "balance_payment_condition": "living_foal_48",
+            "advance_percentage": 52,
+            "cover_place": "ici",
+            "maximum_nb_of_attempts": 3,
+            "hosting_specs": {
+                "meadow": {
+                    "price": 6
+                }
+            }
+        }
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
 
-        # testing search feature
-        fake_db.stallions.delete_many({})
+        # cover_specs
+        body["editable_fields_body"]["cover_specs"]["iai"] = {
+            "price": 750,
+            "balance_payment_condition": "living_foal_48",
+            "advance_percentage": 50,
+            "cover_place": "ici",
+            "maximum_nb_of_attempts": -1,
+            "hosting_specs": {
+                "meadow": {
+                    "price": 6
+                }
+            }
+        }
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # cover_specs
+        body["editable_fields_body"]["cover_specs"]["iai"] = {
+            "price": 750,
+            "balance_payment_condition": "living_foal_48",
+            "advance_percentage": 50,
+            "cover_place": "ici",
+            "maximum_nb_of_attempts": 3,
+            "hosting_specs": {
+                "meadow": False,
+            }
+        }
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # cover_specs
+        body["editable_fields_body"]["cover_specs"] = {}
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # pedigree
+        body["editable_fields_body"]["cover_specs"]["iai"] = {
+            "price": 750,
+            "balance_payment_condition": "living_foal_48",
+            "advance_percentage": 50,
+            "cover_place": "ici",
+            "maximum_nb_of_attempts": 3,
+            "hosting_specs": {
+                "meadow": {
+                    "price": 6
+                }
+            }
+        }
+        body["editable_fields_body"]["pedigree"] = [""] * 15
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        body["editable_fields_body"]["pedigree"] = ["Popa"]
+        body["editable_fields_body"]["stallion_std_negative_tests"] = ["not a disease"]
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        body["editable_fields_body"]["stallion_std_negative_tests"] = {
+            "anemie": {
+                "test_date": "08/10/2023"
+            }
+        }
+        body["editable_fields_body"]["stallion_vaccines"] = ["covid15"]
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        # put stallion in db to test next routes 422
+        body["editable_fields_body"]["stallion_vaccines"] = ["grippe"]
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        stallion_id = response.json()["stallion_id"]
+        self.assertEqual(response.status_code, 200)
+
+        self.phtl = open('/lerepairedeletalon/server/current/test/stallions/photo_too_large.jpg', 'rb')
+        self.vftl = open('/lerepairedeletalon/server/current/test/stallions/verification_file_too_large.pdf', 'rb')
+
         files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("verification_file", ("verification_file.png", self.vftl, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Joris")),
-            ("breed", (None, "Arabe")),
-            ("n_sire", (None, "65234871X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "43.6")),
-            ("lng", (None, "1.433333")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Arabe")),
-            ("production_breeds", (None, "Boulonnais")),
-            ("cover_types", (None, 'iai')),
-            ("cover_types", (None, 'iac')),
-            ("cover_places", (None, 'ici')),
-            ("cover_places", (None, '')),
-            ("prices", (None, '750')),
-            ("prices", (None, '1278')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, 'seller')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+    
+        files = (
+            ("verification_file", ("verification_file.png", self.vf, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.phtl, "image/jpg"))
+        )
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
 
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        # register another user
+        response = client.post('/auth/register', json={
+            "firstname": "Joris",
+            "lastname": "Lagraphe",
+            "email": "lrdeservice2@gmail.com",
+            "phone_number": "+33665824651",
+            "password": "acjiodfehy"
+        })
         self.assertEqual(response.status_code, 200)
+
+        # login to get access token
+        response = client.post('/auth/login', json={
+            "email": "lrdeservice2@gmail.com",
+            "password": "acjiodfehy"
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue("accessToken" in response.json())
+        access_token = response.json()["accessToken"]
+
+        other_headers = {"Authorization": f"Bearer {access_token}"}
 
         files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Bertrand")),
-            ("breed", (None, "Fjord")),
-            ("n_sire", (None, "74566523X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Blanc")),
-            ("height", (None, "177")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "44.841225")),
-            ("lng", (None, "-0.5800364")),
-            ("city", (None, "Bordeaux")),
-            ("postal_code", (None, "33000")),
-            ("production_breeds", (None, "Fjord")),
-            ("cover_types", (None, 'lib')),
-            ("cover_types", (None, 'hand')),
-            ("cover_places", (None, 'ici2')),
-            ("cover_places", (None, 'là2')),
-            ("prices", (None, '425')),
-            ("prices", (None, '570')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '50')),
-            ('left_straws_owners', (None, '')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
 
-        response = client.post('/stallions/register-new-stallion', files=files, headers=headers)
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=other_headers)
+        self.assertEqual(response.status_code, 403)
+
+        response = client.post('/stallions/stallion-files/651bd0779fdb7d78aecf9ef3', files=files, headers=headers)
+        self.assertEqual(response.status_code, 404)
+
+        response = client.post('/stallions/stallion-files/651bd0779fdb7d78aec', files=files, headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
 
-        fake_db.stallions.update_many({}, {"$set": {"searchable": True}})
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
+        self.assertEqual(response.status_code, 403)
 
+        response = client.put(f'/stallions/stallion/{stallion_id}', json=body["editable_fields_body"], headers=other_headers)
+        self.assertEqual(response.status_code, 403)
+
+        files = (
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
+        )
+
+        response = client.put(f'/stallions/stallion-files/{stallion_id}', files=files, headers=other_headers)
+        self.assertEqual(response.status_code, 403)
+
+        response = client.delete(f"/stallions/stallion/{stallion_id}", headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        # add stallions for search
+        body = {}
+
+        body["final_fields_body"] = {
+            "name": "Joris",
+            "breed": "Arabe",
+            "n_sire": "65234871X",
+            "birthdate": "28/10/1998"
+        }
+
+        body["editable_fields_body"] = {
+            "main_desc": "desc",
+            "color": "Bai",
+            "height": 170,
+            "lat": 43.6,
+            "lng": 1.433333,
+            "city": "Toulouse",
+            "postal_code": "31000",
+            "production_breeds": [
+                "Arabe",
+                "Boulonnais"
+            ],
+            "cover_specs": {
+                "iai": {
+                    "price": 750,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "cover_place": "ici",
+                    "maximum_nb_of_attempts": 3,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 6
+                        }
+                    }
+                },
+                "iac": {
+                    "price": 1278,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "nb_provided_straws": 9,
+                    "left_straws_owner": "seller"
+                }
+            },
+            "pedigree": [
+                "Popa"
+                ],
+            "pedigree_po": "pedigree po",
+            "cover_additional_info": "cover additional info",
+            "performance": "perf",
+            "stallion_additional_info": "stallion additional info",
+            "offspring": "the offspring",
+            "crossbreeding_advice": "que des juments cools",
+            "stallion_std_negative_tests": {
+                "metrite": {
+                    "test_date": "08/10/2023"
+                },
+                "arterite": {
+                    "test_date": "08/10/2023"
+                }
+            },
+            "stallion_vaccines": [
+                "rhino"
+            ]
+        }
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        joris_id = response.json()["stallion_id"]
+        files = (
+            ("verification_file", ("verification_file.png", self.vf, "image/png")),
+            ("photos", ("photo.jpg", self.ph, "image/jpg")),
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
+        )
+        response = client.post(f'/stallions/stallion-files/{joris_id}', files=files, headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        body = {}
+
+        body["final_fields_body"] = {
+            "name": "Bertrand",
+            "breed": "Fjord",
+            "n_sire": "74566523X",
+            "birthdate": "28/10/1998"
+        }
+
+        body["editable_fields_body"] = {
+            "main_desc": "desc",
+            "color": "Blanc",
+            "height": 177,
+            "lat": 44.841225,
+            "lng": -0.5800364,
+            "city": "Bordeaux",
+            "postal_code": "33000",
+            "production_breeds": [
+                "Fjord"
+            ],
+            "cover_specs": {
+                "lib": {
+                    "price": 425,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "cover_place": "ici2",
+                    "maximum_nb_of_attempts": 3,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 6
+                        }
+                    },
+                    "demanded_std_negative_tests": {
+                        "metrite": {
+                            "test_oldness": 30
+                        },
+                        "arterite": {
+                            "test_oldness": 30
+                        }
+                    },
+                    "demanded_vaccines": []
+                },
+                "hand": {
+                    "price": 570,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "cover_place": "là2",
+                    "maximum_nb_of_attempts": 3,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 6
+                        }
+                    },
+                    "demanded_std_negative_tests": {
+                        "metrite": {
+                            "test_oldness": 30
+                        },
+                        "arterite": {
+                            "test_oldness": 30
+                        }
+                    },
+                    "demanded_vaccines": []
+                }
+            },
+            "pedigree": [
+                "Popa"
+                ],
+            "pedigree_po": "pedigree po",
+            "cover_additional_info": "cover additional info",
+            "performance": "perf",
+            "stallion_additional_info": "stallion additional info",
+            "offspring": "the offspring",
+            "crossbreeding_advice": "que des juments cools",
+            "stallion_std_negative_tests": {
+                "metrite": {
+                    "test_date": "08/10/2023"
+                },
+                "arterite": {
+                    "test_date": "08/10/2023"
+                }
+            },
+            "stallion_vaccines": [
+                "rhino"
+            ]
+        }
+        response = client.post('/stallions/stallion', json=body, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        bertrand_id = response.json()["stallion_id"]
+        response = client.post(f'/stallions/stallion-files/{bertrand_id}', files=files, headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        fake_db.stallions.update_many({},{"$set": {"searchable": True}})
         # with page <= 0
         response = client.get('/stallions/search?page=0&limit=16')
         self.assertEqual(response.status_code, 422)
@@ -1540,13 +888,6 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.json()["content"][0]["name"], "Joris")
         self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT']).total)
 
-        # testing 422 breeds
-        response = client.get('/stallions/search?page=1&limit=16&breeds=doesnotexist')
-        self.assertEqual(response.status_code, 422)
-
-        response = client.get('/stallions/search?page=1&limit=16&breeds=bonjour&breeds=Welsh')
-        self.assertEqual(response.status_code, 422)
-
         # breed and price
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580')
         self.assertEqual(response.status_code, 200)
@@ -1574,13 +915,6 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 0)
 
-        # testing 422 production breeds
-        response = client.get('/stallions/search?page=1&limit=16&production_breeds=doesnotexist')
-        self.assertEqual(response.status_code, 422)
-
-        response = client.get('/stallions/search?page=1&limit=16&production_breeds=bonjour&production_breeds=Welsh')
-        self.assertEqual(response.status_code, 422)
-
         # price, breed and production_breeds
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner')
         self.assertEqual(response.status_code, 200)
@@ -1592,7 +926,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["name"], "Bertrand")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT']).total)
 
         # testing 422 cover types
         response = client.get('/stallions/search?page=1&limit=16&cover_types=doesnotexist')
@@ -1607,7 +941,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(len(response.json()["content"]), 0)
 
         # price, breed, production_breeds and cover_types
-        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&cover_types=hand')
+        response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=100&production_breeds=Fjord&production_breeds=Trakehner&cover_types=hand')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT']).total)
@@ -1674,9 +1008,9 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def tearDown(self):
-        self.cs.close()
+        self.vf.close()
         self.ph.close()
-        self.cstl.close()
+        self.vftl.close()
         self.phtl.close()
 
 

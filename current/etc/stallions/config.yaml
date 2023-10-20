@@ -1,4 +1,4 @@
-c_saillies_max_size: 10000000 #10Mo
+verification_file_max_size: 10000000 #10Mo
 photo_max_size: 4000000 #4Mo
 
 cover_types:
@@ -8,7 +8,12 @@ cover_types:
   - iart
   - iac
 
-cover_types_for_which_cover_place_has_to_be_provided:
+onsite_cover_types:
+  - lib
+  - hand
+  - iai
+
+remote_cover_types:
   - iart
   - iac
 
@@ -21,58 +26,15 @@ balance_payment_conditions:
 advance_min_percentage_value: 15
 advance_max_percentage_value: 50
 
-breeds:
-  - AQPS
-  - Anglo-Arabe
-  - Arabe
-  - Ardennais
-  - Auxois
-  - Barbe
-  - Baudet du Poitou
-  - Boulonnais
-  - Breton
-  - Camargue
-  - Cheval Castillonnais
-  - Cheval Corse
-  - Cheval Miniature Français
-  - Cheval de Dressage Français
-  - Cheval de Mérens
-  - Cheval de Race Auvergne
-  - Cheval de Sport Anglo-Normand
-  - Cheval du Vercors de Barraquand
-  - Cob Normand
-  - Comtois
-  - Connemara
-  - Criollo
-  - Crème
-  - Dartmoor
-  - Fjord
-  - Franches-Montagnes
-  - Haflinger
-  - Henson
-  - Highland
-  - Irish Cob
-  - Islandais
-  - Landais
-  - Lipizzan
-  - Lusitanien
-  - New-Forest
-  - Percheron
-  - Poitevin Mulassier
-  - Poney Français de Selle
-  - Pottok
-  - Pur Sang Anglais
-  - Selle Français
-  - Shagya
-  - Shetland
-  - Trait du Nord
-  - Trakehner
-  - Trotteur Français
-  - Welsh
-  - Âne Bourbonnais
-  - Âne Corse
-  - Âne Grand Noir du Berry
-  - Âne Normand
-  - Âne de Provence
-  - Âne des Pyrénées
-  - Âne du Cotentin
+available_std_tests:
+  - metrite
+  - arterite
+  - anemie
+
+minimum_std_test_oldness: 1
+maximum_std_test_oldness: 180
+
+available_vaccines:
+  - rhino
+  - grippe
+  - tetanos

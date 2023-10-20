@@ -5,8 +5,7 @@ from bson.objectid import ObjectId
 from typing import Annotated
 from datetime import datetime
 
-from pydantic import conint
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Query
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Path
 from fastapi.responses import Response
 
 import src.api.stallions.utils as utils
@@ -64,16 +63,6 @@ async def search(
     if limit <= 0:
         raise HTTPException(status_code=422, detail="limit can't be <= 0")
 
-    if production_breeds is not None:
-        for production_breed in production_breeds:
-            if production_breed not in config["breeds"]:
-                raise HTTPException(status_code=422, detail="a production breed is not allowed")
-
-    if breeds is not None:
-        for breed in breeds:
-            if breed not in config["breeds"]:
-                raise HTTPException(status_code=422, detail="a breed is not allowed")
-
     if cover_types is not None:
         for cover_type in cover_types:
             if cover_type not in config["cover_types"]:
@@ -92,9 +81,7 @@ async def search(
         price_query["$lte"] = max_price
 
     if price_query:
-        query["prices"] = {}
-        query["prices"]["$elemMatch"] = {}
-        query["prices"]["$elemMatch"]["price"] = price_query
+        query["$or"] = [{f'cover_specs.{cover_type}.price': price_query} for cover_type in config["cover_types"]]
 
     # breed
     if breeds is not None:
@@ -131,19 +118,18 @@ async def search(
     # cover type
     if cover_types is not None:
         if price_query:
-            query["prices"]["$elemMatch"]["cover_type"] = {"$in": cover_types}
+            for cover_type in [elt for elt in config["cover_types"] if elt not in cover_types]:
+                query["$or"].remove({f'cover_specs.{cover_type}.price': price_query})
         else:
-            query["prices"] = {}
-            query["prices"]["$elemMatch"] = {}
-            query["prices"]["$elemMatch"]["cover_type"] = {"$in": cover_types}
+            query["$or"] = [{f'cover_specs.{cover_type}': {"$exists": True}} for cover_type in cover_types]
 
     # searchability
     query["searchable"] = True
 
     try:
-        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "prices": 1, "photos": 1}).skip((page - 1) * limit).limit(limit)
+        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "cover_specs": 1, "photos": 1, "height": 1}).skip((page - 1) * limit).limit(limit)
     except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+        logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     mp_l = []
@@ -152,21 +138,40 @@ async def search(
             id=str(document["_id"]),
             name=document["name"],
             breed=document["breed"],
+            height=document["height"],
+            cover_types=list(document["cover_specs"].keys()),
             city=document["city"],
             dep_name=document["dep_name"],
             reg_name=document["reg_name"],
-            price=utils.get_displayed_price(document, min_price, max_price),
+            price=utils.get_displayed_price(document, min_price, max_price, config["cover_types"]) if cover_types is None \
+                else utils.get_displayed_price(document, min_price, max_price, cover_types),
             photo_id=str(document["photos"][0])
         ))
-
     return schemas.SearchRM(content=mp_l)
 
-@router.get('/stallion-photo')
-async def get_stallion_photo(photo_id: str, db = Depends(get_db)):
+async def get_stallion_in_db(stallion_id: str = Path(...), db = Depends(get_db)):
     try:
-        photo = db.stallions_photos.find_one({"_id": ObjectId(photo_id)})
+        stallion_id = ObjectId(stallion_id)
     except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+        raise HTTPException(status_code=422, detail="stallion_id not readable") from exc
+
+    try:
+        stallion_in_db = db.stallions.find_one({"_id": stallion_id})
+    except Exception as exc:
+        logger.error("failed to read db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read db") from exc
+
+    if stallion_in_db is None:
+        raise HTTPException(status_code=404, detail="stallion not found")
+
+    return stallion_in_db
+
+@router.get('/stallion-photo/{photo_id}')
+async def get_stallion_photo(photo_id, db = Depends(get_db)):
+    try:
+        photo = db.stallion_photos.find_one({"_id": ObjectId(photo_id)})
+    except Exception as exc:
+        logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if photo is None:
@@ -176,23 +181,8 @@ async def get_stallion_photo(photo_id: str, db = Depends(get_db)):
     image_content_type = photo["content_type"]
     return Response(content=image_data, media_type=image_content_type)
 
-@router.get('/stallion-profile-information', response_model=schemas.GetStallionProfileInformationRM)
-async def get_stallion_profile(stallion_id: str, current_user = Depends(get_current_user), db = Depends(get_db)):
-    try:
-        stallion_in_db = db.stallions.find_one(
-            {"_id": ObjectId(stallion_id)},
-            {
-                "_id": 0,
-                "c_saillies": 0
-            }
-        )
-    except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
-        raise HTTPException(status_code=500, detail='failed to read db') from exc
-    
-    if stallion_in_db is None:
-        raise HTTPException(status_code=404, detail="stallion not found")
-    
+@router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformation)
+async def get_stallion_profile(stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user)):
     if not stallion_in_db["searchable"]:
         raise HTTPException(status_code=403, detail="stallion profile information cant be fetched yet")
 
@@ -209,25 +199,25 @@ async def get_stallion_profile(stallion_id: str, current_user = Depends(get_curr
         'pedigree',
         'pedigree_po',
         'stallion_additional_info',
-        'prices',
+        'cover_specs',
         'production_breeds',
         'cover_additional_info',
-        'location',
         'city',
         'postal_code',
         'dep_name',
-        'reg_name'
+        'reg_name',
+        'stallion_std_negative_tests',
+        'stallion_vaccines',
+        'crossbreeding_advice'
     ]:
         kwargs[field] = stallion_in_db[field]
 
-    stallion = schemas.StallionProfileInformation(
-        owner=str(stallion_in_db['owner']),
-        photos=[str(oid) for oid in stallion_in_db["photos"]],
-        age=utils.calculate_age(stallion_in_db["birthdate"]),
+    return {
+        "owner": str(stallion_in_db['owner']),
+        "photos": [str(oid) for oid in stallion_in_db["photos"]],
+        "age": utils.calculate_age(stallion_in_db["birthdate"]),
         **kwargs
-    )
-
-    return {"stallionProfile": stallion}
+    }
 
 @router.get('/my-stallions', response_model=schemas.GetMyStallionsRM)
 async def get_my_stallions(current_user = Depends(get_current_user), db = Depends(get_db)):
@@ -236,7 +226,7 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "photos": 1, "searchable": 1})
     except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+        logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     content = []
@@ -248,177 +238,265 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
             photoId=str(document["photos"][0]),
             searchable=document["searchable"]
         ))
-    
+
     return schemas.GetMyStallionsRM(content=content)
 
-@router.post('/register-new-stallion')
+@router.post('/stallion')
 async def register_new_stallion(
-    name: Annotated[str, Form()],
-    breed: Annotated[str, Form()],
-    n_sire: Annotated[str, Form()],
-    c_saillies: Annotated[UploadFile, File()],
-    photos: Annotated[list[UploadFile], File()],
-    main_desc: Annotated[str, Form()],
-    color: Annotated[str, Form()],
-    height: Annotated[float, Form()],
-    birthdate: Annotated[str, Form()],
-    lat: Annotated[float, Form()],
-    lng: Annotated[float, Form()],
-    city: Annotated[str, Form()],
-    postal_code: Annotated[str, Form()],
-    production_breeds: Annotated[list[str], Form()],
-    cover_types: Annotated[list[str], Form()],
-    cover_places: Annotated[list[str], Form()],
-    prices: Annotated[list[int], Form()],
-    balance_payment_conditions: Annotated[list[str], Form()],
-    advance_percentages: Annotated[list[conint(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])], Form()],
-    left_straws_owners: Annotated[list[str], Form()],
-    pedigree: Annotated[list[str], Form()] = None,
-    cover_additional_info: Annotated[str, Form()] = "",
-    performance: Annotated[str, Form()] = "",
-    pedigree_po: Annotated[str, Form()] = "",
-    stallion_additional_info: Annotated[str, Form()] = "",
-    offspring: Annotated[str, Form()] = "",
+    final_fields_body: schemas.FinalStallionFields,
+    editable_fields_body: schemas.EditableStallionFields,
     current_user = Depends(get_current_user),
     db = Depends(get_db)
 ):
-    # parameters parsing
-    if breed not in config['breeds']:
-        raise HTTPException(status_code=422, detail='breed is not available')
-
-    if c_saillies.size > config['c_saillies_max_size']:
-        raise HTTPException(status_code=422, detail="c_saillies is too large")
-
-    c_saillies_f = {}
-    c_saillies_f["content_type"] = c_saillies.content_type
-    c_saillies_f["data"] = await c_saillies.read()
-
-    photos_f = []
-    for uploadfile_obj in photos:
-        if uploadfile_obj.size > config['photo_max_size']:
-            raise HTTPException(status_code=422, detail="one of the photos is too large")
-        p = {
-            "content_type": uploadfile_obj.content_type,
-            "data": await uploadfile_obj.read()
-        } 
-        photos_f.append(p)
-
+    # fields parsing
     try:
-        birthdate_datetime = datetime.strptime(birthdate, "%d/%m/%Y")
+        birthdate_datetime = datetime.strptime(final_fields_body.birthdate, "%d/%m/%Y")
     except Exception as exc:
         raise HTTPException(status_code=422, detail="incorrect birth_date date format") from exc
 
     location = {
         "type": "Point",
-        "coordinates": [lng, lat]
+        "coordinates": [editable_fields_body.lng, editable_fields_body.lat]
     }
 
     try:
-        result = geoloc_utils.find_dep_and_region(postal_code[:2])
+        result = geoloc_utils.find_dep_and_region(editable_fields_body.postal_code[:2])
         if not result:
             raise ValueError
     except Exception as exc:
-        logger.error(f'failed to french deps csv: {traceback.format_exc()}')
+        logger.error('failed to french deps csv: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to browse french deps csv") from exc
-    
+
     dep_name = result["dep_name"]
     reg_name = result["reg_name"]
 
-    for p_breed in production_breeds:
-        if p_breed not in config["breeds"]:
-            raise HTTPException(status_code=422, detail='a production breed is not available')
-    if sorted(production_breeds) != sorted(list(set(production_breeds))):
-        raise HTTPException(status_code=422, detail='atleast 1 production breed is duplicated')
-
-
-    length = len(cover_types)
-    for l in [cover_places, prices, balance_payment_conditions, advance_percentages, left_straws_owners]:
-        if len(l) != length:
-            raise HTTPException(status_code=422, detail="cover places, types and prices lengths are not equal")
-
-    if sorted(cover_types) != sorted(list(set(cover_types))):
-        raise HTTPException(status_code=422, detail='atleast 1 cover type is duplicated')
-
-    processed_prices = []
-    for cover_type, cover_place, price, balance_payment_condition, advance_percentage, left_straws_owner \
-    in zip(cover_types, cover_places, prices, balance_payment_conditions, advance_percentages, left_straws_owners):
-        if cover_type not in config["cover_types"]:
-            raise HTTPException(status_code=422, detail="unknown cover type")
-        
-        if cover_type in config["cover_types_for_which_cover_place_has_to_be_provided"]:
-            if cover_place != "" or left_straws_owner not in ["seller", "buyer"]:
-                raise HTTPException(status_code=422, detail="invalid cover_place or left_straws_owner params")
-        else:
-            if cover_place == "" or left_straws_owner != "":
-                raise HTTPException(status_code=422, detail="invalid cover_place or left_straws_owner params")
-        
-        if balance_payment_condition not in config["balance_payment_conditions"]:
-            raise HTTPException(status_code=422, detail="unprocessable balance payment condition")
-
-        processed_prices.append({
-            "cover_type": cover_type,
-            "cover_place": cover_place,
-            "price": price,
-            "advance_percentage": advance_percentage,
-            "balance_payment_condition": balance_payment_condition,
-            "left_straws_owner": left_straws_owner
-            })
-            
-
-    if pedigree is None:
-        pedigree = []
-
-    if len(pedigree) > 14:
-        raise HTTPException(status_code=422, detail="too many items in pedigree")
-
-    if len(pedigree) <= 14:
-        pedigree = pedigree + ["" for _ in range(14 - len(pedigree))]
-
     # add to db
     try:
-        stallion_in_db = db.stallions.find_one({"n_sire": n_sire})
+        stallion_in_db = db.stallions.find_one({"n_sire": final_fields_body.n_sire})
     except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+        logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
     if stallion_in_db is not None:
         raise HTTPException(status_code=400, detail="a stallion already exists with this SIRE number")
 
     try:
-        c_saillies_iores = db.c_saillies.insert_one(c_saillies_f)
-        c_saillies_id = c_saillies_iores.inserted_id
-
-        photos_ids = []
-        for photo in photos_f:
-            photos_ids.append(db.stallions_photos.insert_one(photo).inserted_id)
-        db.stallions.insert_one({
+        insert_one_result = db.stallions.insert_one({
             "owner": current_user["_id"],
-            "name": name,
-            "breed": breed,
-            "n_sire": n_sire,
-            "c_saillies": c_saillies_id,
-            "photos": photos_ids,
-            "main_desc": main_desc,
-            "color": color,
+            "name": final_fields_body.name,
+            "breed": final_fields_body.breed,
+            "n_sire": final_fields_body.n_sire,
+            "main_desc": editable_fields_body.main_desc,
+            "color": editable_fields_body.color,
             "birthdate": birthdate_datetime,
-            "height": height,
-            "offspring": offspring,
-            "performance": performance,
-            "pedigree": pedigree,
-            "pedigree_po": pedigree_po,
-            "stallion_additional_info": stallion_additional_info,
-            "production_breeds": production_breeds,
-            "prices": processed_prices,
-            "cover_additional_info": cover_additional_info,
+            "height": editable_fields_body.height,
+            "offspring": editable_fields_body.offspring,
+            "performance": editable_fields_body.performance,
+            "pedigree": editable_fields_body.pedigree,
+            "pedigree_po": editable_fields_body.pedigree_po,
+            "stallion_additional_info": editable_fields_body.stallion_additional_info,
+            "stallion_std_negative_tests": editable_fields_body.stallion_std_negative_tests.model_dump(exclude_none=True),
+            "stallion_vaccines": editable_fields_body.stallion_vaccines,
+            "production_breeds": editable_fields_body.production_breeds,
+            "cover_specs": editable_fields_body.cover_specs.model_dump(exclude_none=True),
+            "cover_additional_info": editable_fields_body.cover_additional_info,
+            "crossbreeding_advice": editable_fields_body.crossbreeding_advice,
             "location": location,
-            "city": city,
-            "postal_code": postal_code,
+            "city": editable_fields_body.city,
+            "postal_code": editable_fields_body.postal_code,
             "dep_name": dep_name,
             "reg_name": reg_name,
             "searchable": False
         })
     except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+        logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-    return {"message": "stallion registered successfully"}    
+    return {
+        "message": "stallion registered successfully",
+        "stallion_id": str(insert_one_result.inserted_id)
+        }
+
+@router.post('/stallion-files/{stallion_id}')
+async def register_new_stallion_files(
+    verification_file: Annotated[UploadFile, File()],
+    photos: Annotated[list[UploadFile], File()],
+    stallion_in_db = Depends(get_stallion_in_db),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    if current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can post stallion files")
+
+    if "photos" in stallion_in_db or "verification_file" in stallion_in_db:
+        raise HTTPException(status_code=403, detail="can post only once on this route")
+
+    if verification_file.size > config['verification_file_max_size']:
+        raise HTTPException(status_code=422, detail="verification_file is too large")
+
+    verification_file_obj = {}
+    verification_file_obj["content_type"] = verification_file.content_type
+    verification_file_obj["data"] = await verification_file.read()
+
+    photo_obj_list = []
+    for photo_f in photos:
+        if photo_f.size > config['photo_max_size']:
+            raise HTTPException(status_code=422, detail="one of the photos is too large")
+        p = {
+            "content_type": photo_f.content_type,
+            "data": await photo_f.read()
+        } 
+        photo_obj_list.append(p)
+
+    try:
+        db.stallions.update_one({
+            "_id": stallion_in_db["_id"]
+        },
+        {
+            "$set": {
+                "verification_file": db.verification_files.insert_one(verification_file_obj).inserted_id,
+                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list]
+            }
+        })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "successfully added stallion files"}
+
+@router.put('/stallion/{stallion_id}')
+async def edit_stallion_profile(
+    editable_fields_body: schemas.EditableStallionFields,
+    stallion_in_db = Depends(get_stallion_in_db),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+
+    if current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can edit stallion")
+
+    location = {
+        "type": "Point",
+        "coordinates": [editable_fields_body.lng, editable_fields_body.lat]
+    }
+
+    try:
+        result = geoloc_utils.find_dep_and_region(editable_fields_body.postal_code[:2])
+        if not result:
+            raise ValueError
+    except Exception as exc:
+        logger.error('failed to french deps csv: %s', traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to browse french deps csv") from exc
+
+    dep_name = result["dep_name"]
+    reg_name = result["reg_name"]
+
+    try:
+        db.stallion_photos.delete_many({
+            "_id": {
+                "$in": stallion_in_db["photos"]
+            }
+        })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    try:
+        db.stallions.update_one({
+            "_id": stallion_in_db["_id"]
+        },
+        {
+            "$set": {
+                "main_desc": editable_fields_body.main_desc,
+                "color": editable_fields_body.color,
+                "height": editable_fields_body.height,
+                "offspring": editable_fields_body.offspring,
+                "performance": editable_fields_body.performance,
+                "pedigree": editable_fields_body.pedigree,
+                "pedigree_po": editable_fields_body.pedigree_po,
+                "stallion_additional_info": editable_fields_body.stallion_additional_info,
+                "stallion_std_negative_tests": editable_fields_body.stallion_std_negative_tests.model_dump(exclude_none=True),
+                "stallion_vaccines": editable_fields_body.stallion_vaccines,
+                "production_breeds": editable_fields_body.production_breeds,
+                "cover_specs": editable_fields_body.cover_specs.model_dump(exclude_none=True),
+                "cover_additional_info": editable_fields_body.cover_additional_info,
+                "crossbreeding_advice": editable_fields_body.crossbreeding_advice,
+                "location": location,
+                "city": editable_fields_body.city,
+                "postal_code": editable_fields_body.postal_code,
+                "dep_name": dep_name,
+                "reg_name": reg_name
+            }
+        })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "updated stallion successfully"}
+
+@router.put('/stallion-files/{stallion_id}')
+async def update_stallion_photos(
+    photos: Annotated[list[UploadFile], File()],
+    stallion_in_db = Depends(get_stallion_in_db),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    if current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can update stallion photos")
+
+    photo_obj_list = []
+    for photo_f in photos:
+        if photo_f.size > config['photo_max_size']:
+            raise HTTPException(status_code=422, detail="one of the photos is too large")
+        p = {
+            "content_type": photo_f.content_type,
+            "data": await photo_f.read()
+        } 
+        photo_obj_list.append(p)
+
+    try:
+        db.stallions.update_one({
+            "_id": stallion_in_db["_id"]
+        },
+        {
+            "$set": {
+                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list]
+            }
+        })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "successfully updated stallion photos"}
+
+
+@router.delete('/stallion/{stallion_id}')
+async def delete_stallion(stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
+    if current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can delete stallion")
+
+    if "photos" in stallion_in_db:
+        try:
+            db.stallion_photos.delete_many({
+                "_id": {
+                    "$in": stallion_in_db["photos"]
+                }
+            })
+        except Exception as exc:
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    if "verification_file" in stallion_in_db:
+        try:
+            db.verification_files.delete_one({"_id": stallion_in_db["verification_file"]})
+        except Exception as exc:
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    try:
+        db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "successfully deleted stallion"}

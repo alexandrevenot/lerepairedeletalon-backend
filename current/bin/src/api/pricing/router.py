@@ -1,14 +1,12 @@
 import logging
 import logging.handlers
-import traceback
-from bson.objectid import ObjectId
 from fastapi import APIRouter, HTTPException, Depends
 
 import src.api.pricing.schemas as schemas
 import src.api.pricing.utils as utils
 
 from src.api.auth.router import get_current_user
-from src.database.db import get_db
+from src.api.covers.router import get_cover_in_db
 
 # config
 config = utils.load_config()
@@ -37,29 +35,19 @@ async def get_checkout_simulation(subtotal: int):
     return utils.calculate_checkout(subtotal, buyer_fees_ht, TVA_coeff_HT)
 
 # to be updated with mangopay
-@router.get('/checkout', response_model=schemas.Checkout)
-async def get_checkout(cover_id: str, current_user = Depends(get_current_user), db = Depends(get_db)):
-    try:
-        cover_id = ObjectId(cover_id)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="unprocessable cover_id") from exc
-
-    try:
-        cover_in_db = db.covers.find_one({"_id": cover_id})
-    except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
-        raise HTTPException(status_code=500, detail="failed to read db") from exc
-
-    if cover_in_db is None:
-        raise HTTPException(status_code=404, detail="cover not found")
-    
+@router.get('/checkout/{cover_id}', response_model=schemas.Checkout)
+async def get_checkout(cover_in_db = Depends(get_cover_in_db), current_user = Depends(get_current_user)):    
     if current_user["_id"] != cover_in_db["buyer_id"]:
         raise HTTPException(status_code=403, detail="only buyer can get checkout")
-    
+
     if cover_in_db["status"] == "sellersigned":
-        checkout = utils.calculate_checkout(cover_in_db["advance_subtotal"], cover_in_db["advance_buyer_fees_ht"], config["TVA_coeff_HT"])
+        advance_subtotal = utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True)
+        advance_buyer_fees_ht = utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)
+        checkout = utils.calculate_checkout(advance_subtotal, advance_buyer_fees_ht, config["TVA_coeff_HT"])
     elif cover_in_db["status"] == "downpaid":
-        checkout = utils.calculate_checkout(cover_in_db["balance_subtotal"], cover_in_db["balance_buyer_fees_ht"], config["TVA_coeff_HT"])
+        balance_subtotal = utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True)
+        balance_buyer_fees_ht = utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)
+        checkout = utils.calculate_checkout(balance_subtotal, balance_buyer_fees_ht, config["TVA_coeff_HT"])
     else:
         raise HTTPException(status_code=403, detail="status does not allow payment")
 

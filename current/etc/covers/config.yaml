@@ -1,3 +1,28 @@
+buyer_status_graph:
+  requested:
+  approved:
+    - signingstarted
+  signingstarted:
+  buyersigned:
+  sellersigned:
+  downpaid:
+  fullypaid:
+  denied:
+
+seller_status_graph:
+  requested:
+    - denied
+    - approved
+  approved:
+    - requested
+  signingstarted:
+  buyersigned:
+  sellersigned:
+  downpaid:
+  fullypaid:
+  denied:
+    - requested
+
 status:
   - requested
   - approved
@@ -6,8 +31,11 @@ status:
   - sellersigned
   - downpaid
   - fullypaid
+  - denied
 
 groups:
+  denied:
+    - denied
   pendingApproval:
     - requested
     - approved

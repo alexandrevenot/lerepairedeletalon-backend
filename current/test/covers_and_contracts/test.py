@@ -40,7 +40,6 @@ server.dependency_overrides[auth_router.get_db] = lambda: fake_db
 server.dependency_overrides[stallions_router.get_db] = lambda: fake_db
 server.dependency_overrides[covers_router.get_db] = lambda: fake_db
 server.dependency_overrides[contracts_router.get_db] = lambda: fake_db
-server.dependency_overrides[pricing_router.get_db] = lambda: fake_db
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
@@ -73,42 +72,93 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         owner_headers = {"Authorization": f"Bearer {access_token}"}
 
-        self.cs = open('/lerepairedeletalon/server/current/test/stallions/carnetdesaillie.png', 'rb')
+        self.vf = open('/lerepairedeletalon/server/current/test/stallions/verification_file.png', 'rb')
         self.ph = open('/lerepairedeletalon/server/current/test/stallions/sellefrançais.jpg', 'rb')
 
         # add a stallion
+        body = {}
+
+        body["final_fields_body"] = {
+            "name": "Michel du Rouet",
+            "breed": "Selle Français",
+            "n_sire": "65123458X",
+            "birthdate": "28/10/1998"
+        }
+
+        body["editable_fields_body"] = {
+            "main_desc": "desc",
+            "color": "Bai",
+            "height": 170,
+            "lat": 44.841225,
+            "lng": -0.5800364,
+            "city": "Bordeaux",
+            "postal_code": "33000",
+            "production_breeds": [
+                "Selle Français"
+            ],
+            "cover_specs": {
+                "lib": {
+                    "price": 425,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 50,
+                    "cover_place": "ici2",
+                    "maximum_nb_of_attempts": 3,
+                    "hosting_specs": {
+                        "meadow": {
+                            "price": 6
+                        }
+                    },
+                    "demanded_std_negative_tests": {
+                        "metrite": {
+                            "test_oldness": 30,
+                        },
+                        "arterite": {
+                            "test_oldness": 30,
+                        }
+                    },
+                    "demanded_vaccines": []
+                },
+                "iac": {
+                    "price": 750,
+                    "balance_payment_condition": "living_foal_48",
+                    "advance_percentage": 40,
+                    "nb_provided_straws": 9,
+                    "left_straws_owner": "seller"
+                }
+            },
+            "pedigree": [
+                "Popa"
+                ],
+            "pedigree_po": "pedigree po",
+            "cover_additional_info": "cover additional info",
+            "performance": "perf",
+            "stallion_additional_info": "stallion additional info",
+            "offspring": "the offspring",
+            "crossbreeding_advice": "que des juments cools",
+            "stallion_std_negative_tests": {
+                "metrite": {
+                    "test_date": "09/10/2023"
+                },
+                "arterite": {
+                    "test_date": "09/10/2023"
+                }
+            },
+            "stallion_vaccines": [
+                "rhino"
+            ]
+        }
+
+        response = client.post('/stallions/stallion', json=body, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        stallion_id = response.json()["stallion_id"]
+
         files = (
-            ("c_saillies", ("c_saillies.png", self.cs, "image/png")),
+            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg")),
-            ("name", (None, "Michel du Rouet")),
-            ("breed", (None, "Selle Français")),
-            ("n_sire", (None, "65123458X")),
-            ("main_desc", (None, "desc")),
-            ("color", (None, "Bai")),
-            ("height", (None, "170")),
-            ("birthdate", (None, "28/10/1998")),
-            ("lat", (None, "0.7")),
-            ("lng", (None, "0.1")),
-            ("city", (None, "Toulouse")),
-            ("postal_code", (None, "31000")),
-            ("production_breeds", (None, "Selle Français")),
-            ("cover_types", (None, 'iac')),
-            ("cover_places", (None, '')),
-            ("prices", (None, '750')),
-            ('balance_payment_conditions', (None, 'living_foal_48')),
-            ('advance_percentages', (None, '40')),
-            ('left_straws_owners', (None, 'seller')),
-            ("pedigree", (None, 'Popa')),
-            ("cover_additional_info", (None, "cover additional info")),
-            ("performance", (None, "perf")),
-            ("pedigree_po", (None, "pedigree perfs offspring")),
-            ("stallion_additional_info", (None, "stallion additional info")),
-            ("offspring", (None, "the offspring"))
+            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
 
-        response = client.post('/stallions/register-new-stallion', files=files, headers=owner_headers)
-        print
+        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=owner_headers)
         self.assertEqual(response.status_code, 200)
 
         fake_db.stallions.update_many(
@@ -155,8 +205,10 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
+
         self.assertEqual(response.status_code, 200)
+
         fake_db.covers.delete_many({},{})
 
         # when seller id = buyer id
@@ -170,22 +222,8 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=owner_headers)
+        response = client.post('/covers/cover', json=body, headers=owner_headers)
         self.assertEqual(response.status_code, 400)
-
-        # when the breed does not exist
-        body = {
-            "seller_id": str(stallion_in_db["owner"]),
-            "stallion_nsire": "65123458X",
-            "mare_nsire": "64853156156X",
-            "mare_name": "Bernadette de Normandie",
-            "mare_breed": "wtf",
-            "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
-        }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
-        self.assertEqual(response.status_code, 422)
 
         # when the stallion nsire does not exist
         body = {
@@ -198,7 +236,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 404)
 
         # when the seller id does not exist
@@ -212,7 +250,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 404)
 
         # when the seller id is not readable
@@ -226,7 +264,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # when the cover type does not exist
@@ -240,7 +278,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "wtf",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # REQUESTED
@@ -255,7 +293,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 200)
 
         cover_in_db = fake_db.covers.find_one({},{})
@@ -274,24 +312,17 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_in_db["stallion_name"], stallion_in_db["name"])
         self.assertEqual(cover_in_db["stallion_breed"], stallion_in_db["breed"])
         self.assertEqual(cover_in_db["stallion_production_breeds"], stallion_in_db["production_breeds"])
-
-        for price in stallion_in_db["prices"]:
-            if price["cover_type"] == cover_in_db["cover_type"]:
-                balance_payment_condition = price["balance_payment_condition"]
-                left_straws_owner = price["left_straws_owner"]
-
-        self.assertEqual(cover_in_db["balance_payment_condition"], balance_payment_condition)
-        self.assertEqual(cover_in_db["left_straws_owner"], left_straws_owner)
-        self.assertTrue(list(cover_in_db["timestamps"].values())[0] < datetime.datetime.now())
-        for timestamp in list(cover_in_db["timestamps"].values())[1:]:
-            self.assertIsNone(timestamp)
+        self.assertEqual(cover_in_db["balance_payment_condition"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["balance_payment_condition"])
+        self.assertEqual(cover_in_db["left_straws_owner"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["left_straws_owner"])
+        self.assertEqual(cover_in_db["timestamps"]["cursor_index"], 1)
+        self.assertTrue(cover_in_db["timestamps"]["timestamps_list"][0]["timestamp"] < datetime.datetime.now())
+        for timestamp in cover_in_db["timestamps"]["timestamps_list"][1:]:
+            self.assertIsNone(timestamp["timestamp"])
         self.assertEqual(cover_in_db["cover_place"], "ici")
-        self.assertEqual(cover_in_db["advance_subtotal"], math.ceil(750*0.4))
-        self.assertEqual(cover_in_db["balance_subtotal"], math.floor(750*0.6))
-        self.assertEqual(cover_in_db["advance_buyer_fees_ht"], 45*0.4)
-        self.assertEqual(cover_in_db["advance_seller_fees_ht"], 45*0.4)
-        self.assertEqual(cover_in_db["balance_buyer_fees_ht"], 45*0.6)
-        self.assertEqual(cover_in_db["balance_seller_fees_ht"], 45*0.6)
+        self.assertEqual(cover_in_db["subtotal"], 750)
+        self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
+        self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
+        self.assertEqual(cover_in_db["advance_percentage"], 40)
         self.assertEqual(cover_in_db["notes"], {
             "seller": "",
             "buyer": ""
@@ -330,7 +361,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "iac",
             "provided_cover_place": "ici"
         }
-        response = client.post('/covers/create-cover', json=body, headers=headers)
+        response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 200)
 
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=buyer', headers=headers)
@@ -360,16 +391,16 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         other_user_headers = {"Authorization": f"Bearer {access_token}"}
 
-        # user is neither buyer nor seller: 401
-        response = client.get(f'/covers/cover-information?cover_id={cover_id}', headers=other_user_headers)
-        self.assertEqual(response.status_code, 401)
+        # user is neither buyer nor seller: 403
+        response = client.get(f'/covers/cover/{cover_id}', headers=other_user_headers)
+        self.assertEqual(response.status_code, 403)
 
         # wrong cover_id: 404
-        response = client.get(f'/covers/cover-information?cover_id={wrong_cover_id}', headers=headers)
+        response = client.get(f'/covers/cover/{wrong_cover_id}', headers=headers)
         self.assertEqual(response.status_code, 404)
 
         # when user is buyer
-        response = client.get(f'/covers/cover-information?cover_id={cover_id}', headers=headers)
+        response = client.get(f'/covers/cover/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
         cover_information_json = response.json()
         self.assertEqual(cover_information_json["stallion_name"], "Michel du Rouet")
@@ -384,7 +415,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["status"], "requested")
         self.assertEqual(cover_information_json["price"], 750 + math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
-        self.assertEqual(cover_information_json["timestamps"][config["status"][0]][:2], "Le")
+        self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
         self.assertEqual(cover_information_json["contact_name"], "Michel Dupont")
         self.assertEqual(cover_information_json["contact_phone_number"], "")
@@ -392,7 +423,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["pov"], "buyer")
 
         # when user is seller
-        response = client.get(f'/covers/cover-information?cover_id={cover_id}', headers=owner_headers)
+        response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
         cover_information_json = response.json()
         self.assertEqual(cover_information_json["stallion_name"], "Michel du Rouet")
@@ -407,7 +438,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["status"], "requested")
         self.assertEqual(cover_information_json["price"], 750 - math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
-        self.assertEqual(cover_information_json["timestamps"][config["status"][0]][:2], "Le")
+        self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
         self.assertEqual(cover_information_json["contact_name"], "Joris Lagraphe")
         self.assertEqual(cover_information_json["contact_phone_number"], "+33665824651")
@@ -415,48 +446,107 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["pov"], "seller")
 
         # notes
-        # when wrong user access token: 401
-        response = client.put("/covers/update-notes", json={"cover_id": cover_id, "notes": "hehe"}, headers=other_user_headers)
-        self.assertEqual(response.status_code, 401)
+        # when wrong user access token: 403
+        response = client.put(f"/covers/cover-notes/{cover_id}", json={"notes": "hehe"}, headers=other_user_headers)
+        self.assertEqual(response.status_code, 403)
 
         # when wrong cover id: 404
-        response = client.put("/covers/update-notes", json={"cover_id": wrong_cover_id, "notes": "hehe"}, headers=headers)
+        response = client.put(f"/covers/cover-notes/{wrong_cover_id}", json={"notes": "hehe"}, headers=headers)
         self.assertEqual(response.status_code, 404)
 
         # when ok: modifying buyer notes: 200
-        response = client.put("/covers/update-notes", json={"cover_id": cover_id, "notes": "hehe"}, headers=headers)
+        response = client.put(f"/covers/cover-notes/{cover_id}", json={"notes": "hehe"}, headers=headers)
         self.assertEqual(response.status_code, 200)
 
         # check that seller notes stayed the same
-        response = client.get(f'/covers/cover-information?cover_id={cover_id}', headers=owner_headers)
+        response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
         self.assertEqual(response.json()["notes"], "")
 
         # check that buyer notes indeed changed
-        response = client.get(f'/covers/cover-information?cover_id={cover_id}', headers=headers)
+        response = client.get(f'/covers/cover/{cover_id}', headers=headers)
         self.assertEqual(response.json()["notes"], "hehe")
+
+        # COVER EDITION
+        # when buyer tries to edit cover
+        response = client.put(f'/covers/cover/{cover_id}', json={"new_subtotal": 300}, headers=headers)
+        self.assertEqual(response.status_code, 403)
+
+        # when seller edits price
+        response = client.put(f'/covers/cover/{cover_id}', json={"new_subtotal": 300}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["price"], 300 - math.ceil(0.06 * 300 * 1.2))
+
+        response = client.put(f'/covers/cover/{cover_id}', json={"arrival_date": "28/10/1998"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 403)
+
+        response = client.put(f'/covers/cover/{cover_id}', json={"new_subtotal": 750}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        # quick tests on a cover type allowing to set arrival date
+
+        body = {
+            "seller_id": str(stallion_in_db["owner"]),
+            "stallion_nsire": "65123458X",
+            "mare_nsire": "7413214Y",
+            "mare_name": "Marie-Jeanne",
+            "mare_breed": "Arabe",
+            "message": "Yo",
+            "cover_type": "lib",
+            "provided_cover_place": ""
+        }
+        response = client.post('/covers/cover', json=body, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        temp_cover_id = str(fake_db.covers.find_one({"mare_name": "Marie-Jeanne"})["_id"])
+
+        response = client.put(f'/covers/cover/{temp_cover_id}', json={"arrival_date": "30/03/2024"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        response = client.get(f'/covers/cover/{temp_cover_id}', headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["arrival_date"], "30/03/2024")
+
+        fake_db.covers.delete_one({"_id": ObjectId(temp_cover_id)})
 
         # APPROVED
         # approve cover request
 
         # with unexisting cover id
-        response = client.post('/covers/approve-requested-cover', json={"cover_id": wrong_cover_id}, headers=owner_headers)
+        response = client.post(f'/covers/step-forward-cover/{wrong_cover_id}', json={"next_status": "approved"}, headers=owner_headers)
         self.assertEqual(response.status_code, 404)
 
         # when its the buyer that tries to approve his own cover buying demand
-        response = client.post('/covers/approve-requested-cover', json={"cover_id": cover_id}, headers=headers)
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "approved"}, headers=headers)
         self.assertEqual(response.status_code, 403)
 
         # when ok
-        response = client.post('/covers/approve-requested-cover', json={"cover_id": cover_id}, headers=owner_headers)
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "approved"}, headers=owner_headers)
         self.assertEqual(response.status_code, 200)
 
         cover_in_db = fake_db.covers.find_one({"_id": cover_in_db["_id"]})
         self.assertEqual(cover_in_db["status"], config["status"][1])
-        self.assertFalse(cover_in_db["timestamps"][config["status"][1]] is None)
+        self.assertFalse(cover_in_db["timestamps"]["timestamps_list"][1]["status"] is None)
 
-        # when the cover is already approveed
-        response = client.post('/covers/approve-requested-cover', json={"cover_id": cover_id}, headers=owner_headers)
+        # when the cover is already approved
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "approved"}, headers=owner_headers)
         self.assertEqual(response.status_code, 403)
+
+        # edition when the cover is already approved fails
+        response = client.put(f'/covers/cover/{cover_id}', json={"new_subtotal": 1200}, headers=owner_headers)
+        self.assertEqual(response.status_code, 403)
+
+        # move back to requested, then denied, then requested, then approved
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "requested"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "denied"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "requested"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "approved"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
 
         # check if cover stays in right cover group
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=buyer', headers=headers)
@@ -499,15 +589,15 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             }, None)
 
             # wrong cover id
-            response = client.get(f'/contracts/sign-page-url?cover_id={wrong_cover_id}', headers=headers)
+            response = client.get(f'/contracts/sign-page-url/{wrong_cover_id}', headers=headers)
             self.assertEqual(response.status_code, 404)
 
             # when a user not involved in the cover tries to sign
-            response = client.get(f'/contracts/sign-page-url?cover_id={cover_id}', headers=other_user_headers)
-            self.assertEqual(response.status_code, 401)
+            response = client.get(f'/contracts/sign-page-url/{cover_id}', headers=other_user_headers)
+            self.assertEqual(response.status_code, 403)
 
             # when ok
-            response = client.get(f'/contracts/sign-page-url?cover_id={cover_id}', headers=headers)
+            response = client.get(f'/contracts/sign-page-url/{cover_id}', headers=headers)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(contracts_router.utils.create_and_send_contract.call_args_list), 1)
             self.assertEqual(response.json()["url"], "first_signer_sign_page_url")
@@ -522,7 +612,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cover_in_db["status"], "signingstarted")
 
             # when ok
-            response = client.get(f'/contracts/sign-page-url?cover_id={cover_id}', headers=headers)
+            response = client.get(f'/contracts/sign-page-url/{cover_id}', headers=headers)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["url"], "first_signer_sign_page_url")
             cover_in_db = fake_db.covers.find_one({"_id": ObjectId(cover_id)})
@@ -584,8 +674,10 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         for elt in sent_body["placeholder_fields"]:
             placeholders[elt["api_key"]] = elt["value"]
         
-        self.assertEqual(placeholders["down_payment"], cover_in_db["advance_subtotal"] + math.ceil(1.2 * cover_in_db["advance_buyer_fees_ht"]))
-        self.assertEqual(placeholders["last_payment"], cover_in_db["balance_subtotal"] + math.ceil(1.2 * cover_in_db["balance_buyer_fees_ht"]))
+        self.assertEqual(placeholders["down_payment"], pricing_utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True) \
+            + math.ceil(1.2 * pricing_utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)))
+        self.assertEqual(placeholders["last_payment"], pricing_utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True) \
+            + math.ceil(1.2 * pricing_utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)))
 
         # testing webhooks
 
@@ -685,7 +777,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_in_db["status"], "buyersigned")
 
         # check that checkout cannot be get because the contract is not sellersigned
-        response = client.get(f'/pricing/checkout?cover_id={cover_id}', headers=headers)
+        response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 403)
 
         # check that cover is indeed forwarded when its signing_order == "2"
@@ -709,19 +801,19 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # checkout tests
         # when the cover id is not readable
-        response = client.get('/pricing/checkout?cover_id=oungabounga', headers=headers)
+        response = client.get('/pricing/checkout/oungabounga', headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # when the cover id is wrong
-        response = client.get(f'/pricing/checkout?cover_id={wrong_cover_id}', headers=headers)
+        response = client.get(f'/pricing/checkout/{wrong_cover_id}', headers=headers)
         self.assertEqual(response.status_code, 404)
 
         # when the access token is not the buyers one
-        response = client.get(f'/pricing/checkout?cover_id={cover_id}', headers=owner_headers)
+        response = client.get(f'/pricing/checkout/{cover_id}', headers=owner_headers)
         self.assertEqual(response.status_code, 403)
 
         # when ok
-        response = client.get(f'/pricing/checkout?cover_id={cover_id}', headers=headers)
+        response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["subtotal"], 300)
         self.assertEqual(response.json()["service_fees"], 22)
@@ -729,11 +821,11 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["status"], "sellersigned")
 
         # to be changed in the future
-        response = client.post('/covers/step-forward-payment', json={"cover_id": cover_id})
+        response = client.post(f'/covers/step-forward-payment/{cover_id}')
         self.assertEqual(response.status_code, 200)
 
         # balance checkout
-        response = client.get(f'/pricing/checkout?cover_id={cover_id}', headers=headers)
+        response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["subtotal"], 450)
         self.assertEqual(response.json()["service_fees"], 33)
@@ -741,7 +833,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["status"], "downpaid")
 
     def tearDown(self):
-        self.cs.close()
+        self.vf.close()
         self.ph.close()
 
 if __name__ == '__main__':
