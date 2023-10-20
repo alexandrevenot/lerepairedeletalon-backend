@@ -46,15 +46,12 @@ def calculate_corresponding_subtotal(required_price: float, buyer_fees_coeff: fl
     d = 1 + buyer_fees_coeff * (1 + TVA_coeff_HT)
     return n/d
 
-def get_cover_payment_details(subtotal: int, buyer_fees_coeff: float, buyer_fees_offset: float, seller_fees_coeff: float, seller_fees_offset: float, advance_coeff: int) -> schemas.CoverPaymentDetails:
+def get_cover_payment_details(subtotal: int, buyer_fees_coeff: float, buyer_fees_offset: float, seller_fees_coeff: float, seller_fees_offset: float) -> schemas.CoverPaymentDetails:
     buyer_fees_ht = calculate_fees_ht(subtotal, buyer_fees_coeff, buyer_fees_offset)
     seller_fees_ht = calculate_fees_ht(subtotal, seller_fees_coeff, seller_fees_offset)
 
     return schemas.CoverPaymentDetails(
-        advance_subtotal=calculate_advance(subtotal, advance_coeff, True),
-        advance_buyer_fees_ht=calculate_advance(buyer_fees_ht, advance_coeff, False),
-        advance_seller_fees_ht=calculate_advance(seller_fees_ht, advance_coeff, False),
-        balance_subtotal=calculate_balance(subtotal, advance_coeff, True),
-        balance_buyer_fees_ht=calculate_balance(buyer_fees_ht, advance_coeff, False),
-        balance_seller_fees_ht=calculate_balance(seller_fees_ht, advance_coeff, False)
+        subtotal=subtotal,
+        buyer_fees_ht=buyer_fees_ht,
+        seller_fees_ht=seller_fees_ht
     )

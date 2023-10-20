@@ -15,7 +15,9 @@ def load_config() -> dict:
     with open('/lerepairedeletalon/server/current/etc/stallions/config.yaml', 'r') as f:
         return yaml.load(f, Loader=yaml.FullLoader)
 
-def get_displayed_price(document: dict, min_price: float, max_price: float) -> float:
+config = load_config()
+
+def get_displayed_price(document: dict, min_price: float, max_price: float, cover_types: list[str]) -> float:
     count = 0
     if min_price is not None:
         count += 1
@@ -23,14 +25,14 @@ def get_displayed_price(document: dict, min_price: float, max_price: float) -> f
         count += 1
 
     if count == 0:
-        value = min([elt["price"] for elt in document["prices"]])
+        value = min([value["price"] for key, value in document["cover_specs"].items() if key in cover_types])
     elif count == 1:
         if min_price is not None:
-            value = min([elt["price"] for elt in document["prices"] if elt["price"] >= min_price])
+            value = min([value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and key in cover_types])
         else:
-            value = min([elt["price"] for elt in document["prices"] if elt["price"] <= max_price])
+            value = min([value["price"] for key, value in document["cover_specs"].items() if value["price"] <= max_price and key in cover_types])
     else:
-        value = min([elt["price"] for elt in document["prices"] if elt["price"] >= min_price and elt["price"] <= max_price])
+        value = min([value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and value["price"] <= max_price and key in cover_types])
 
     buyer_fees_ht = pricing_utils.calculate_fees_ht(value, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'])
     return pricing_utils.calculate_checkout(value, buyer_fees_ht, pricing_config['TVA_coeff_HT']).total
