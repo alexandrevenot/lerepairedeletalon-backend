@@ -34,8 +34,16 @@ class DashboardStallionBox(BaseModel):
     id: str
     name: str
     breed: str
-    photoId: str
-    searchable: bool
+    photo_id: str
+    last_update_timestamp: str
+    profile_status: str
+
+    @field_validator('profile_status')
+    @classmethod
+    def profile_status_validator(cls, value):
+        if value not in config["profile_statuses"]:
+            raise HTTPException(status_code=500, detail="failed to get stallion boxes")
+        return value
 
 class GetMyStallionsRM(BaseModel):
     content: list[DashboardStallionBox]
@@ -208,7 +216,7 @@ class EditableStallionFields(BaseModel):
 
         if len(value) <= 14:
             value = value + ["" for _ in range(14 - len(value))]
-        
+
         return value
 
     @field_validator('stallion_vaccines')
@@ -240,3 +248,28 @@ class StallionProfileInformation(BaseModel):
     offspring: str
     crossbreeding_advice: str
     photos: list[str]
+
+class StallionCompleteProfileInformation(BaseModel):
+    name: str
+    breed: str
+    n_sire: str
+    photos: list[str]
+    main_desc: str
+    color: str
+    height: float
+    birthdate: str
+    city: str
+    postal_code: str
+    lat: float
+    lng: float
+    pedigree: list[str]
+    crossbreeding_advice: str
+    stallion_std_negative_tests: StallionSTDSpecs
+    stallion_vaccines: list[str]
+    offspring: str
+    performance: str
+    pedigree_po: str
+    stallion_additional_info: str
+    production_breeds: list[str]
+    cover_specs: CoverSpecs
+    cover_additional_info: str

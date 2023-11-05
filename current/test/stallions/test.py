@@ -135,13 +135,13 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(str(response.json()["content"][0]["name"]), "Michel du Rouet")
         self.assertEqual(str(response.json()["content"][0]["breed"]), "Selle Français")
         stallion_in_db = fake_db.stallions.find_one({"_id": ObjectId(stallion_id)})
-        self.assertEqual(str(response.json()["content"][0]["photoId"]), str(stallion_in_db["photos"][0]))
-        self.assertFalse(response.json()["content"][0]["searchable"])
-        self.assertEqual(len(response.json()["content"][0].keys()), 5)
+        self.assertEqual(str(response.json()["content"][0]["photo_id"]), str(stallion_in_db["photos"][0]))
+        self.assertEqual(response.json()["content"][0]["profile_status"], "to_be_validated")
+        self.assertEqual(len(response.json()["content"][0].keys()), 6)
 
-        fake_db.stallions.update_one({"_id": ObjectId(stallion_id)}, {"$set": {"searchable": True}})
+        fake_db.stallions.update_one({"_id": ObjectId(stallion_id)}, {"$set": {"profile_status": "visible"}})
 
-        response = client.get(f'/stallions/stallion/{stallion_id}', headers=headers)
+        response = client.get(f'/stallions/stallion/{stallion_id}?mode=partial', headers=headers)
         self.assertEqual(response.status_code, 200)
         content = response.json()
 
@@ -245,7 +245,7 @@ class StallionsTest(unittest.TestCase):
         nb_of_photos_in_db = len([_ for _ in fake_db.stallion_photos.find()])
         self.assertEqual(nb_of_photos_in_db, 2)
 
-        response = client.get(f'/stallions/stallion/{stallion_id}', headers=headers)
+        response = client.get(f'/stallions/stallion/{stallion_id}?mode=partial', headers=headers)
         self.assertEqual(response.status_code, 200)
         content = response.json()
 
@@ -704,7 +704,23 @@ class StallionsTest(unittest.TestCase):
         response = client.post(f'/stallions/stallion-files/{bertrand_id}', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
 
-        fake_db.stallions.update_many({},{"$set": {"searchable": True}})
+        fake_db.stallions.update_many({},{"$set": {"profile_status": "visible"}})
+
+        response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=hidden', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=wtf', headers=headers)
+        self.assertEqual(response.status_code, 403)
+
+        response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=visible')
+        self.assertEqual(response.status_code, 401)
+
+        response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=visible', headers=other_headers)
+        self.assertEqual(response.status_code, 403)
+
+        response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=visible', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
         # with page <= 0
         response = client.get('/stallions/search?page=0&limit=16')
         self.assertEqual(response.status_code, 422)

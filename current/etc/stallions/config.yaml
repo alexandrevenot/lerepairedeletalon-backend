@@ -38,3 +38,8 @@ available_vaccines:
   - rhino
   - grippe
   - tetanos
+
+profile_statuses:
+  - to_be_validated
+  - hidden
+  - visible

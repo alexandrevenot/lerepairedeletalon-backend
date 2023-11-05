@@ -130,7 +130,7 @@ async def get_current_user(authorization: Annotated[str | None, Header()] = None
         token = fields[1]
     except Exception as exc:
         raise HTTPException(status_code=401, detail='token not found in the request') from exc
-    
+
     _id = utils.verify_token(token, 'access')
 
     try:
