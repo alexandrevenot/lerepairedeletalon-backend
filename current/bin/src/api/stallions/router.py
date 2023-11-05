@@ -114,7 +114,7 @@ async def search(
         query["location"] = {}
         query["location"]["$geoWithin"] = {}
         query["location"]["$geoWithin"]["$centerSphere"] = [[lng, lat], distance / 6371.0]
-    
+
     # cover type
     if cover_types is not None:
         if price_query:
@@ -124,7 +124,7 @@ async def search(
             query["$or"] = [{f'cover_specs.{cover_type}': {"$exists": True}} for cover_type in cover_types]
 
     # searchability
-    query["searchable"] = True
+    query["profile_status"] = "visible"
 
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "cover_specs": 1, "photos": 1, "height": 1}).skip((page - 1) * limit).limit(limit)
@@ -181,13 +181,19 @@ async def get_stallion_photo(photo_id, db = Depends(get_db)):
     image_content_type = photo["content_type"]
     return Response(content=image_data, media_type=image_content_type)
 
-@router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformation)
-async def get_stallion_profile(stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user)):
-    if not stallion_in_db["searchable"]:
+@router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformation | schemas.StallionCompleteProfileInformation)
+async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user)):
+    if mode not in ['partial', 'complete']:
+        raise HTTPException(status_code=422, detail="mode has to be either 'partial' or 'complete'")
+
+    if mode == 'partial' and stallion_in_db["profile_status"] != "visible":
         raise HTTPException(status_code=403, detail="stallion profile information cant be fetched yet")
 
+    if mode == 'complete' and current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can get stallion complete information")
+
     kwargs = {}
-    for field in [
+    fields = [
         'name',
         'breed',
         'n_sire',
@@ -203,19 +209,31 @@ async def get_stallion_profile(stallion_in_db = Depends(get_stallion_in_db), cur
         'production_breeds',
         'cover_additional_info',
         'city',
-        'postal_code',
-        'dep_name',
-        'reg_name',
         'stallion_std_negative_tests',
         'stallion_vaccines',
         'crossbreeding_advice'
-    ]:
+    ]
+
+    if mode == 'partial':
+        fields += [
+            'dep_name',
+            'reg_name'
+        ]
+        kwargs['owner'] = str(stallion_in_db['owner'])
+        kwargs['age'] = utils.calculate_age(stallion_in_db['birthdate'])
+    else:
+        fields += [
+            'postal_code'
+        ]
+        kwargs['birthdate'] = stallion_in_db['birthdate'].strftime('%d/%m/%Y')
+        kwargs['lng'] = stallion_in_db['location']['coordinates'][0]
+        kwargs['lat'] = stallion_in_db['location']['coordinates'][1]
+
+    for field in fields:
         kwargs[field] = stallion_in_db[field]
 
     return {
-        "owner": str(stallion_in_db['owner']),
         "photos": [str(oid) for oid in stallion_in_db["photos"]],
-        "age": utils.calculate_age(stallion_in_db["birthdate"]),
         **kwargs
     }
 
@@ -224,7 +242,7 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
     query = {"owner": current_user['_id']}
 
     try:
-        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "photos": 1, "searchable": 1})
+        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "photos": 1, "profile_status": 1, "last_update_timestamp":1})
     except Exception as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
@@ -235,8 +253,9 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
             id=str(document["_id"]),
             name=document["name"],
             breed=document["breed"],
-            photoId=str(document["photos"][0]),
-            searchable=document["searchable"]
+            photo_id=str(document["photos"][0]),
+            profile_status=document["profile_status"],
+            last_update_timestamp=document["last_update_timestamp"].strftime("le %d/%m/%Y à %H:%M")
         ))
 
     return schemas.GetMyStallionsRM(content=content)
@@ -306,7 +325,8 @@ async def register_new_stallion(
             "postal_code": editable_fields_body.postal_code,
             "dep_name": dep_name,
             "reg_name": reg_name,
-            "searchable": False
+            "profile_status": "to_be_validated",
+            "last_update_timestamp": datetime.now()
         })
     except Exception as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
@@ -355,7 +375,8 @@ async def register_new_stallion_files(
         {
             "$set": {
                 "verification_file": db.verification_files.insert_one(verification_file_obj).inserted_id,
-                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list]
+                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
+                "last_update_timestamp": datetime.now()
             }
         })
     except Exception as exc:
@@ -392,16 +413,6 @@ async def edit_stallion_profile(
     reg_name = result["reg_name"]
 
     try:
-        db.stallion_photos.delete_many({
-            "_id": {
-                "$in": stallion_in_db["photos"]
-            }
-        })
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
-
-    try:
         db.stallions.update_one({
             "_id": stallion_in_db["_id"]
         },
@@ -425,7 +436,8 @@ async def edit_stallion_profile(
                 "city": editable_fields_body.city,
                 "postal_code": editable_fields_body.postal_code,
                 "dep_name": dep_name,
-                "reg_name": reg_name
+                "reg_name": reg_name,
+                "last_update_timestamp": datetime.now()
             }
         })
     except Exception as exc:
@@ -444,6 +456,16 @@ async def update_stallion_photos(
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can update stallion photos")
 
+    try:
+        db.stallion_photos.delete_many({
+            "_id": {
+                "$in": stallion_in_db["photos"]
+            }
+        })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
     photo_obj_list = []
     for photo_f in photos:
         if photo_f.size > config['photo_max_size']:
@@ -460,7 +482,8 @@ async def update_stallion_photos(
         },
         {
             "$set": {
-                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list]
+                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
+                "last_update_timestamp": datetime.now()
             }
         })
     except Exception as exc:
@@ -500,3 +523,36 @@ async def delete_stallion(stallion_in_db = Depends(get_stallion_in_db), current_
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "successfully deleted stallion"}
+
+@router.put('/stallion-profile-status/{stallion_id}')
+async def update_stallion_profile_status(
+    new_status: str,
+    stallion_in_db = Depends(get_stallion_in_db),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+    ):
+    if current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can change stallion profile status")
+
+    if new_status == "visible":
+        if stallion_in_db["profile_status"] != "hidden":
+            raise HTTPException(status_code=403, detail="cannot change to that profile status")
+    elif new_status == "hidden":
+        if stallion_in_db["profile_status"] != "visible":
+            raise HTTPException(status_code=403, detail="cannot change to that profile status")
+    else:
+        raise HTTPException(status_code=403, detail="cannot change to that profile status")
+
+    try:
+        db.stallions.update_one(
+            {"_id": stallion_in_db["_id"]},
+            {
+                "$set": {
+                    "profile_status": new_status
+                }
+            })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "successfully updated stallion profile status"}

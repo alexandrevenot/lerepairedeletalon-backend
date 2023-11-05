@@ -3,7 +3,10 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+#from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
+
+#import src.api.middleware as middleware
 
 dirs = ["log", "run"]
 for d in dirs:
@@ -17,6 +20,7 @@ import src.api.covers.router as covers_router
 import src.api.geoloc.router as geoloc_router
 import src.api.pricing.router as pricing_router
 import src.api.contracts.router as contracts_router
+import src.api.admin.router as admin_router
 
 server = FastAPI()
 
@@ -26,6 +30,7 @@ server.include_router(covers_router.router)
 server.include_router(geoloc_router.router)
 server.include_router(pricing_router.router)
 server.include_router(contracts_router.router)
+server.include_router(admin_router.router)
 
 origins = [
     "http://localhost:4200",
@@ -39,6 +44,11 @@ server.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# server.add_middleware(
+#     BaseHTTPMiddleware,
+#     dispatch=middleware.Middleware()
+# )
 
 params = {
     "host": "localhost",
