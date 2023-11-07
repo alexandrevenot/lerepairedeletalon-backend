@@ -127,7 +127,7 @@ async def search(
     query["profile_status"] = "visible"
 
     try:
-        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "cover_specs": 1, "photos": 1, "height": 1}).skip((page - 1) * limit).limit(limit)
+        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "cover_specs": 1, "thumbnail_photo": 1, "height": 1}).skip((page - 1) * limit).limit(limit)
     except Exception as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
@@ -145,7 +145,7 @@ async def search(
             reg_name=document["reg_name"],
             price=utils.get_displayed_price(document, min_price, max_price, config["cover_types"]) if cover_types is None \
                 else utils.get_displayed_price(document, min_price, max_price, cover_types),
-            photo_id=str(document["photos"][0])
+            photo_id=str(document["thumbnail_photo"])
         ))
     return schemas.SearchRM(content=mp_l)
 
@@ -242,7 +242,7 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
     query = {"owner": current_user['_id']}
 
     try:
-        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "photos": 1, "profile_status": 1, "last_update_timestamp":1})
+        cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "thumbnail_photo": 1, "profile_status": 1, "last_update_timestamp":1})
     except Exception as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
@@ -253,7 +253,7 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
             id=str(document["_id"]),
             name=document["name"],
             breed=document["breed"],
-            photo_id=str(document["photos"][0]),
+            photo_id=str(document["thumbnail_photo"]),
             profile_status=document["profile_status"],
             last_update_timestamp=document["last_update_timestamp"].strftime("le %d/%m/%Y à %H:%M")
         ))
@@ -351,6 +351,9 @@ async def register_new_stallion_files(
     if "photos" in stallion_in_db or "verification_file" in stallion_in_db:
         raise HTTPException(status_code=403, detail="can post only once on this route")
 
+    if not 1 <= len(photos) <= 5:
+        raise HTTPException(status_code=422, detail="there must be between 1 and 5 photos")
+
     if verification_file.size > config['verification_file_max_size']:
         raise HTTPException(status_code=422, detail="verification_file is too large")
 
@@ -358,14 +361,32 @@ async def register_new_stallion_files(
     verification_file_obj["content_type"] = verification_file.content_type
     verification_file_obj["data"] = await verification_file.read()
 
-    photo_obj_list = []
     for photo_f in photos:
         if photo_f.size > config['photo_max_size']:
             raise HTTPException(status_code=422, detail="one of the photos is too large")
+
+    photo_obj_list = []
+    data = await photos[0].read()
+    content_type = photos[0].content_type
+    photo_obj_list.append({
+        "content_type": content_type,
+        "data": data
+    })
+
+    try:
+        thumbnail_photo = {
+            "content_type": content_type,
+            "data": utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
+        }
+    except Exception as exc:
+        logger.error("failed to process photos: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to process photos") from exc
+
+    for photo_f in photos[1:]:
         p = {
             "content_type": photo_f.content_type,
             "data": await photo_f.read()
-        } 
+        }
         photo_obj_list.append(p)
 
     try:
@@ -375,6 +396,7 @@ async def register_new_stallion_files(
         {
             "$set": {
                 "verification_file": db.verification_files.insert_one(verification_file_obj).inserted_id,
+                "thumbnail_photo": db.stallion_photos.insert_one(thumbnail_photo).inserted_id,
                 "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
                 "last_update_timestamp": datetime.now()
             }
@@ -459,21 +481,39 @@ async def update_stallion_photos(
     try:
         db.stallion_photos.delete_many({
             "_id": {
-                "$in": stallion_in_db["photos"]
+                "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
             }
         })
     except Exception as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-    photo_obj_list = []
     for photo_f in photos:
         if photo_f.size > config['photo_max_size']:
             raise HTTPException(status_code=422, detail="one of the photos is too large")
+
+    photo_obj_list = []
+    data = await photos[0].read()
+    content_type = photos[0].content_type
+    photo_obj_list.append({
+        "content_type": content_type,
+        "data": data
+    })
+
+    try:
+        thumbnail_photo = {
+            "content_type": content_type,
+            "data": utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
+        }
+    except Exception as exc:
+        logger.error("failed to process photos: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to process photos") from exc
+
+    for photo_f in photos[1:]:
         p = {
             "content_type": photo_f.content_type,
             "data": await photo_f.read()
-        } 
+        }
         photo_obj_list.append(p)
 
     try:
@@ -482,6 +522,7 @@ async def update_stallion_photos(
         },
         {
             "$set": {
+                "thumbnail_photo": db.stallion_photos.insert_one(thumbnail_photo).inserted_id,
                 "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
                 "last_update_timestamp": datetime.now()
             }
@@ -502,7 +543,7 @@ async def delete_stallion(stallion_in_db = Depends(get_stallion_in_db), current_
         try:
             db.stallion_photos.delete_many({
                 "_id": {
-                    "$in": stallion_in_db["photos"]
+                    "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
                 }
             })
         except Exception as exc:

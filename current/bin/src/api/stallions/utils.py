@@ -1,7 +1,9 @@
 from datetime import datetime, date
+from io import BytesIO
 
 import yaml
 from dateutil.relativedelta import relativedelta
+from PIL import Image
 
 import src.api.pricing.utils as pricing_utils
 
@@ -41,3 +43,13 @@ def calculate_age(birthdate: datetime) -> int:
     today = date.today()
     age = relativedelta(today, birthdate)
     return age.years
+
+def get_thumbnail_photo_data(data: bytes, content_type: str, wished_new_width: int) -> bytes:
+    image = Image.open(BytesIO(data))
+    width, height = image.size
+    new_width = min(width, wished_new_width)
+    lowering_factor = new_width / width
+    image_thumbnail = image.resize((int(new_width), int(lowering_factor*height)), Image.LANCZOS)
+    new_data = BytesIO()
+    image_thumbnail.save(new_data, format=content_type.split('/')[1].upper())
+    return new_data.getvalue()

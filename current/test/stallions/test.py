@@ -135,7 +135,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(str(response.json()["content"][0]["name"]), "Michel du Rouet")
         self.assertEqual(str(response.json()["content"][0]["breed"]), "Selle Français")
         stallion_in_db = fake_db.stallions.find_one({"_id": ObjectId(stallion_id)})
-        self.assertEqual(str(response.json()["content"][0]["photo_id"]), str(stallion_in_db["photos"][0]))
+        self.assertEqual(str(response.json()["content"][0]["photo_id"]), str(stallion_in_db["thumbnail_photo"]))
         self.assertEqual(response.json()["content"][0]["profile_status"], "to_be_validated")
         self.assertEqual(len(response.json()["content"][0].keys()), 6)
 
@@ -243,7 +243,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         nb_of_photos_in_db = len([_ for _ in fake_db.stallion_photos.find()])
-        self.assertEqual(nb_of_photos_in_db, 2)
+        self.assertEqual(nb_of_photos_in_db, 3)
 
         response = client.get(f'/stallions/stallion/{stallion_id}?mode=partial', headers=headers)
         self.assertEqual(response.status_code, 200)
