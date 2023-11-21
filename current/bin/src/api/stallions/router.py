@@ -478,16 +478,6 @@ async def update_stallion_photos(
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can update stallion photos")
 
-    try:
-        db.stallion_photos.delete_many({
-            "_id": {
-                "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
-            }
-        })
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
-
     for photo_f in photos:
         if photo_f.size > config['photo_max_size']:
             raise HTTPException(status_code=422, detail="one of the photos is too large")
@@ -515,6 +505,16 @@ async def update_stallion_photos(
             "data": await photo_f.read()
         }
         photo_obj_list.append(p)
+
+    try:
+        db.stallion_photos.delete_many({
+            "_id": {
+                "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
+            }
+        })
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     try:
         db.stallions.update_one({
