@@ -51,5 +51,8 @@ def get_thumbnail_photo_data(data: bytes, content_type: str, wished_new_width: i
     lowering_factor = new_width / width
     image_thumbnail = image.resize((int(new_width), int(lowering_factor*height)), Image.LANCZOS)
     new_data = BytesIO()
-    image_thumbnail.save(new_data, format=content_type.split('/')[1].upper())
+    image_format = content_type.split('/')[1].upper()
+    if image_format == "JPG":
+        image_format = "JPEG"
+    image_thumbnail.save(new_data, format=image_format)
     return new_data.getvalue()

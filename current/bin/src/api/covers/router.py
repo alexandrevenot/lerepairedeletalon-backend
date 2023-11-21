@@ -77,7 +77,10 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
                 "cover_specs": 1,
                 "name": 1,
                 "breed": 1,
-                "production_breeds": 1
+                "production_breeds": 1,
+                "stallion_std_negative_tests": 1,
+                "stallion_vaccines": 1,
+                "profile_status": 1
             })
     except Exception as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
@@ -86,16 +89,19 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
     if stallion_in_db is None:
         raise HTTPException(status_code=404, detail="stallion not found")
 
+    if stallion_in_db["profile_status"] != "visible":
+        raise HTTPException(status_code=403, detail="stallion not available for cover")
+
     # building document
     if cover.cover_type not in stallion_in_db["cover_specs"]:
         raise HTTPException(status_code=404, detail="cover type does not exist on stallion")
 
-    new_document = cover.model_dump(exclude=["seller_id", "provided_cover_place"])
+    new_document = cover.model_dump(exclude=["seller_id"])
     new_document["seller_id"] = seller_id
 
     timestamps = {
         "cursor_index": 1,
-        "timestamps_list": [{"status": step, "timestamp": datetime.now() if step == config["status"][0] else None} for step in config["status"]]
+        "timestamps_list": [{"status": step, "timestamp": datetime.now() if step == config["status"][0] else None} for step in config["status"][:-1]]
     }
 
     cover_payment_details = pricing_utils.get_cover_payment_details(
@@ -110,8 +116,12 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
     del stallion_in_db["cover_specs"][cover.cover_type]["price"]
     new_document.update(cover_payment_details.model_dump())
 
+    ## insert stallion vaccines and std tests
+    new_document["stallion_vaccines"] = stallion_in_db["stallion_vaccines"]
+    new_document["stallion_std_negative_tests"] = stallion_in_db["stallion_std_negative_tests"]
+
     ## insert cover type details
-    new_document.update(stallion_in_db["cover_specs"][cover.cover_type])
+    new_document["cover_specs"] = stallion_in_db["cover_specs"][cover.cover_type]
 
     ## insert information left
     new_document.update({
@@ -120,9 +130,9 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
         "stallion_name": stallion_in_db["name"],
         "stallion_breed": stallion_in_db["breed"],
         "stallion_production_breeds": stallion_in_db["production_breeds"],
+        "stallion_vaccines": stallion_in_db["stallion_vaccines"],
+        "stallion_std_negative_tests": stallion_in_db["stallion_std_negative_tests"],
         "timestamps": timestamps,
-        "cover_place": cover.provided_cover_place if cover.cover_type in stallions_config["remote_cover_types"] \
-            else stallion_in_db["cover_specs"][cover.cover_type]["cover_place"],
         "notes" : {
             "seller": "",
             "buyer": ""
@@ -174,7 +184,7 @@ async def step_forward_cover(cover_in_db: dict, next_status: str, db = Depends(g
     except Exception as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
-    
+
     return {"message": "successfully step-forwarded cover"}
 
 @router.post('/step-forward-cover/{cover_id}')
@@ -188,6 +198,12 @@ async def manually_step_forward_cover(query: schemas.ManuallyStepForwardCoverQue
 
     if not utils.check_status_graph(cover_in_db["status"], query.next_status, pov):
         raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
+
+    if query.next_status == "approved" and cover_in_db["cover_type"] in stallions_config["onsite_cover_types"]:
+        try:
+            _ = cover_in_db['arrival_date'].strftime("%d/%m/%Y")
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail="an arrival date has to be provided") from exc
 
     await step_forward_cover(cover_in_db, query.next_status, db)
 
@@ -371,20 +387,24 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), current_
         stallion_breed=cover_in_db["stallion_breed"],
         stallion_nsire=cover_in_db["stallion_nsire"],
         stallion_production_breeds=cover_in_db["stallion_production_breeds"],
+        stallion_vaccines=cover_in_db["stallion_vaccines"],
+        stallion_std_negative_tests=cover_in_db["stallion_std_negative_tests"],
         mare_name=cover_in_db["mare_name"],
         mare_breed=cover_in_db["mare_breed"],
         mare_nsire=cover_in_db["mare_nsire"],
-        cover_type=cover_in_db["cover_type"],
-        cover_place=cover_in_db["cover_place"],
-        arrival_date=str(cover_in_db["arrival_date"].strftime("%d/%m/%Y")) if "arrival_date" in cover_in_db else "",
-        status=cover_in_db["status"],
-        price=price,
-        buyer_message=cover_in_db["message"],
-        timestamps=timestamps_list,
-        notes=cover_in_db["notes"][pov],
         contact_name=contact_name,
         contact_phone_number=contact_phone_number,
         contact_email=contact_email,
+        cover_type=cover_in_db["cover_type"],
+        cover_specs=cover_in_db["cover_specs"],
+        provided_cover_place=cover_in_db["provided_cover_place"],
+        arrival_date=str(cover_in_db["arrival_date"].strftime("%d/%m/%Y")) if "arrival_date" in cover_in_db else "",
+        status=cover_in_db["status"],
+        price=price,
+        base_price=cover_in_db["subtotal"],
+        buyer_message=cover_in_db["message"],
+        timestamps=timestamps_list,
+        notes=cover_in_db["notes"][pov],
         pov=pov
     )
 

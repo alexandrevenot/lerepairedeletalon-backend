@@ -161,15 +161,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=owner_headers)
         self.assertEqual(response.status_code, 200)
 
-        fake_db.stallions.update_many(
-            {},
-            {
-                "$set": {
-                    "searchable": True
-                }
-            }
-        )
-
         stallion_in_db = fake_db.stallions.find_one({"name": "Michel du Rouet"})
 
         # actual covers tests
@@ -193,6 +184,30 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue("accessToken" in response.json())
         access_token = response.json()["accessToken"]
         headers = {"Authorization": f"Bearer {access_token}"}
+
+        # when the stallion is not visible
+        body = {
+            "seller_id": str(stallion_in_db["owner"]),
+            "stallion_nsire": "65123458X",
+            "mare_nsire": "64853156156X",
+            "mare_name": "Bernadette de Normandie",
+            "mare_breed": "Boulonnais",
+            "message": "Yo",
+            "cover_type": "iac",
+            "provided_cover_place": "ici"
+        }
+        response = client.post('/covers/cover', json=body, headers=headers)
+
+        self.assertEqual(response.status_code, 403)
+
+        fake_db.stallions.update_many(
+            {},
+            {
+                "$set": {
+                    "profile_status": "visible"
+                }
+            }
+        )
 
         # when everything is fine
         body = {
@@ -312,17 +327,17 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_in_db["stallion_name"], stallion_in_db["name"])
         self.assertEqual(cover_in_db["stallion_breed"], stallion_in_db["breed"])
         self.assertEqual(cover_in_db["stallion_production_breeds"], stallion_in_db["production_breeds"])
-        self.assertEqual(cover_in_db["balance_payment_condition"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["balance_payment_condition"])
-        self.assertEqual(cover_in_db["left_straws_owner"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["left_straws_owner"])
+        self.assertEqual(cover_in_db["cover_specs"]["balance_payment_condition"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["balance_payment_condition"])
+        self.assertEqual(cover_in_db["cover_specs"]["left_straws_owner"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["left_straws_owner"])
         self.assertEqual(cover_in_db["timestamps"]["cursor_index"], 1)
         self.assertTrue(cover_in_db["timestamps"]["timestamps_list"][0]["timestamp"] < datetime.datetime.now())
         for timestamp in cover_in_db["timestamps"]["timestamps_list"][1:]:
             self.assertIsNone(timestamp["timestamp"])
-        self.assertEqual(cover_in_db["cover_place"], "ici")
+        self.assertEqual(cover_in_db["provided_cover_place"], "ici")
         self.assertEqual(cover_in_db["subtotal"], 750)
         self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
         self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
-        self.assertEqual(cover_in_db["advance_percentage"], 40)
+        self.assertEqual(cover_in_db["cover_specs"]["advance_percentage"], 40)
         self.assertEqual(cover_in_db["notes"], {
             "seller": "",
             "buyer": ""
@@ -411,7 +426,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["mare_breed"], "Boulonnais")
         self.assertEqual(cover_information_json["mare_nsire"], "64853156156X")
         self.assertEqual(cover_information_json["cover_type"], "iac")
-        self.assertEqual(cover_information_json["cover_place"], "ici")
+        self.assertEqual(cover_information_json["provided_cover_place"], "ici")
         self.assertEqual(cover_information_json["status"], "requested")
         self.assertEqual(cover_information_json["price"], 750 + math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
@@ -434,7 +449,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["mare_breed"], "Boulonnais")
         self.assertEqual(cover_information_json["mare_nsire"], "64853156156X")
         self.assertEqual(cover_information_json["cover_type"], "iac")
-        self.assertEqual(cover_information_json["cover_place"], "ici")
+        self.assertEqual(cover_information_json["provided_cover_place"], "ici")
         self.assertEqual(cover_information_json["status"], "requested")
         self.assertEqual(cover_information_json["price"], 750 - math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
@@ -674,10 +689,10 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         for elt in sent_body["placeholder_fields"]:
             placeholders[elt["api_key"]] = elt["value"]
         
-        self.assertEqual(placeholders["down_payment"], pricing_utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True) \
-            + math.ceil(1.2 * pricing_utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)))
-        self.assertEqual(placeholders["last_payment"], pricing_utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True) \
-            + math.ceil(1.2 * pricing_utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)))
+        self.assertEqual(placeholders["down_payment"], pricing_utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["cover_specs"]["advance_percentage"], True) \
+            + math.ceil(1.2 * pricing_utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)))
+        self.assertEqual(placeholders["last_payment"], pricing_utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["cover_specs"]["advance_percentage"], True) \
+            + math.ceil(1.2 * pricing_utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)))
 
         # testing webhooks
 
