@@ -19,7 +19,7 @@ handler = logging.handlers.RotatingFileHandler(
     maxBytes=1024 * 1025 * 50,
     backupCount=2,
     mode='a'
-    )
+)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -41,12 +41,12 @@ async def get_checkout(cover_in_db = Depends(get_cover_in_db), current_user = De
         raise HTTPException(status_code=403, detail="only buyer can get checkout")
 
     if cover_in_db["status"] == "sellersigned":
-        advance_subtotal = utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True)
-        advance_buyer_fees_ht = utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)
+        advance_subtotal = utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["cover_specs"]["advance_percentage"], True)
+        advance_buyer_fees_ht = utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)
         checkout = utils.calculate_checkout(advance_subtotal, advance_buyer_fees_ht, config["TVA_coeff_HT"])
     elif cover_in_db["status"] == "downpaid":
-        balance_subtotal = utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["advance_percentage"], True)
-        balance_buyer_fees_ht = utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["advance_percentage"], False)
+        balance_subtotal = utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["cover_specs"]["advance_percentage"], True)
+        balance_buyer_fees_ht = utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)
         checkout = utils.calculate_checkout(balance_subtotal, balance_buyer_fees_ht, config["TVA_coeff_HT"])
     else:
         raise HTTPException(status_code=403, detail="status does not allow payment")

@@ -1,7 +1,10 @@
+from typing import Any
+
 from pydantic import BaseModel, field_validator
 from fastapi import HTTPException
 
 import src.api.stallions.utils as stallions_utils
+import src.api.stallions.schemas as stallions_schemas
 import src.api.covers.utils as utils
 
 config = utils.load_config()
@@ -28,8 +31,10 @@ class CoverQuery(BaseModel):
     @field_validator('provided_cover_place')
     @classmethod
     def provided_cover_place_validator(cls, v, info):
-        if v == "" and info.data["cover_type"] in stallions_config["remote_cover_types"]:
+        if v == "" and info.data["cover_type"] not in stallions_config["onsite_cover_types"]:
             raise HTTPException(status_code=422, detail="a cover place has to be provided")
+        if v != "" and info.data["cover_type"] not in stallions_config["remote_cover_types"]:
+            raise HTTPException(status_code=422, detail="cannot provide cover place on this cover type")
         return v
 
 class ManuallyStepForwardCoverQuery(BaseModel):
@@ -57,6 +62,8 @@ class GetCoverInformation(BaseModel):
     stallion_breed: str
     stallion_nsire: str
     stallion_production_breeds: list[str]
+    stallion_vaccines: list[str] = []
+    stallion_std_negative_tests: stallions_schemas.StallionSTDSpecs
     mare_name: str
     mare_breed: str
     mare_nsire: str
@@ -64,14 +71,21 @@ class GetCoverInformation(BaseModel):
     contact_phone_number: str
     contact_email: str
     cover_type: str
-    cover_place: str
+    cover_specs: Any
+    provided_cover_place: str
     arrival_date: str
-    price: float
+    status: str
+    price: int
+    base_price: int
     buyer_message: str
     timestamps: list[dict]
     notes: str
-    status: str
     pov: str
+
+    @field_validator('stallion_vaccines')
+    @classmethod
+    def stallion_vaccines_validator(cls, value):
+        return stallions_schemas.check_vaccines(value)
 
 class UpdateNotesQuery(BaseModel):
     notes: str

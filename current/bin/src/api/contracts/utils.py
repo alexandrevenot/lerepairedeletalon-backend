@@ -2,8 +2,10 @@ import yaml
 import aiohttp
 
 import src.api.pricing.utils as pricing_utils
+import src.api.stallions.utils as stallions_utils
 
 pricing_config = pricing_utils.load_config()
+stallions_config = stallions_utils.load_config()
 
 def load_global_config() -> dict:
     with open('/lerepairedeletalon/server/current/etc/config.yaml', 'r') as f:
@@ -72,7 +74,7 @@ def build_use_conditions(cover_document):
         res += "Les doses seront envoyées au centre d'insémination sur demande.\n"
         res += "L'acheteur atteste avoir connaissance des conditions dans lesquelles se déroulent les inséminations, ainsi que les risques associés.\n"
         res += "Tous les frais générés par la saillie autres que la fabrication des doses et leur acheminement sont à la charge de l'Acheteur.\n"
-        left_straws_owner_str = "de l'Acheteur" if cover_document["left_straws_owner"] == "buyer" else "du Vendeur"
+        left_straws_owner_str = "de l'Acheteur" if cover_document["cover_specs"]["left_straws_owner"] == "buyer" else "du Vendeur"
         res += f"Si l'insémination est un succès, les paillettes restantes sont la propriété {left_straws_owner_str}."
     return res
 
@@ -170,11 +172,20 @@ async def create_and_send_contract(
             )
         })
     
-    for field in ["stallion_name", "stallion_breed", "mare_name", "mare_breed", "stallion_nsire", "mare_nsire", "cover_place"]:
+    for field in ["stallion_name", "stallion_breed", "mare_name", "mare_breed", "stallion_nsire", "mare_nsire"]:
         placeholder_fields.append({
             "api_key": field,
             "value": cover_document[field]
         })
+
+    if cover_document["cover_type"] in stallions_config["onsite_cover_types"]:
+        cover_place_value = cover_document["cover_place"]
+    else:
+        cover_place_value = cover_document["provided_cover_place"]
+    placeholder_fields.append({
+        "api_key": "cover_place",
+        "value": cover_place_value
+    })
 
     placeholder_fields.append({
         "api_key": "stallion_production_breeds",
@@ -182,14 +193,14 @@ async def create_and_send_contract(
     })
 
     advance = pricing_utils.calculate_checkout(
-        pricing_utils.calculate_advance(cover_document["subtotal"], cover_document["advance_percentage"], True),
-        pricing_utils.calculate_advance(cover_document["buyer_fees_ht"], cover_document["advance_percentage"], False),
+        pricing_utils.calculate_advance(cover_document["subtotal"], cover_document["cover_specs"]["advance_percentage"], True),
+        pricing_utils.calculate_advance(cover_document["buyer_fees_ht"], cover_document["cover_specs"]["advance_percentage"], False),
         pricing_config["TVA_coeff_HT"]
     ).total
 
     balance = pricing_utils.calculate_checkout(
-        pricing_utils.calculate_balance(cover_document["subtotal"], cover_document["advance_percentage"], True),
-        pricing_utils.calculate_balance(cover_document["buyer_fees_ht"], cover_document["advance_percentage"], False),
+        pricing_utils.calculate_balance(cover_document["subtotal"], cover_document["cover_specs"]["advance_percentage"], True),
+        pricing_utils.calculate_balance(cover_document["buyer_fees_ht"], cover_document["cover_specs"]["advance_percentage"], False),
         pricing_config["TVA_coeff_HT"]
     ).total
 
@@ -205,7 +216,7 @@ async def create_and_send_contract(
 
     placeholder_fields.append({
         "api_key": "last_payment_validity_cases",
-        "value": build_balance_payment_conditions(cover_document["balance_payment_condition"])
+        "value": build_balance_payment_conditions(cover_document["cover_specs"]["balance_payment_condition"])
     })
 
     placeholder_fields.append({
