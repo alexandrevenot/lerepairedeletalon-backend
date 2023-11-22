@@ -31,18 +31,18 @@ class JSONEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, o)
 
 def create_access_token(data: dict, duration: int):
-    to_encode = data.copy()
+    to_encode = {}
+    to_encode["_id"] = str(data["_id"])
     expire = datetime.utcnow() + timedelta(minutes=duration)
     to_encode.update({"exp": expire})
-    to_encode["_id"] = str(to_encode["_id"])
     encoded_jwt = jwt.encode(to_encode, ACCESS_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 def create_refresh_token(data: dict, duration: int):
-    to_encode = data.copy()
+    to_encode = {}
+    to_encode["_id"] = str(data["_id"])
     expire = datetime.utcnow() + timedelta(days=duration)
     to_encode.update({"exp": expire})
-    to_encode["_id"] = str(to_encode["_id"])
     encoded_jwt = jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

@@ -181,16 +181,24 @@ async def get_stallion_photo(photo_id, db = Depends(get_db)):
     image_content_type = photo["content_type"]
     return Response(content=image_data, media_type=image_content_type)
 
-@router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformation | schemas.StallionCompleteProfileInformation)
+@router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformationForFavorite | schemas.StallionProfileInformation | schemas.StallionProfileInformationForEdition)
 async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user)):
-    if mode not in ['partial', 'complete']:
-        raise HTTPException(status_code=422, detail="mode has to be either 'partial' or 'complete'")
+    if mode not in ['for_favorite', 'profile', 'for_edition']:
+        raise HTTPException(status_code=422, detail="mode has to be either 'for_favorite', 'profile' or 'for_edition'")
 
-    if mode == 'partial' and stallion_in_db["profile_status"] != "visible":
-        raise HTTPException(status_code=403, detail="stallion profile information cant be fetched yet")
+    if mode == 'profile' and stallion_in_db["profile_status"] != "visible":
+        raise HTTPException(status_code=403, detail="stallion profile information cant be fetched")
 
-    if mode == 'complete' and current_user["_id"] != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can get stallion complete information")
+    if mode == 'for_edition' and current_user["_id"] != stallion_in_db["owner"]:
+        raise HTTPException(status_code=403, detail="only owner can get stallion information for edition")
+
+    if mode == 'for_favorite':
+        return schemas.StallionProfileInformationForFavorite(
+            name=stallion_in_db["name"],
+            breed=stallion_in_db["breed"],
+            thumbnail_photo=str(stallion_in_db["thumbnail_photo"]),
+            profile_status=stallion_in_db["profile_status"]
+        )
 
     kwargs = {}
     fields = [
@@ -214,7 +222,7 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
         'crossbreeding_advice'
     ]
 
-    if mode == 'partial':
+    if mode == 'profile':
         fields += [
             'dep_name',
             'reg_name'
@@ -597,3 +605,67 @@ async def update_stallion_profile_status(
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "successfully updated stallion profile status"}
+
+@router.get('/favorites', response_model=schemas.FavoriteStallions)
+async def get_favorite_stallions(current_user = Depends(get_current_user)):
+    if "favorite_stallions" in current_user:
+        return schemas.FavoriteStallions(favorite_stallions=[str(sid) for sid in current_user["favorite_stallions"]])
+
+    return schemas.FavoriteStallions(favorite_stallions=[])
+
+@router.delete('/favorites/{stallion_id}')
+async def delete_stallion_from_favorites(
+    current_user = Depends(get_current_user),
+    stallion_in_db = Depends(get_stallion_in_db),
+    db = Depends(get_db)
+):
+    if "favorite_stallions" not in current_user or stallion_in_db["_id"] not in current_user["favorite_stallions"]:
+        raise HTTPException(status_code=422, detail="stallion not in favorites")
+
+    try:
+        db.users.update_one(
+            {"_id": current_user["_id"]},
+            {"$pull": {
+                "favorite_stallions": stallion_in_db["_id"]
+            }}
+        )
+    except Exception as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "successfully deleted stallion from favorites"}
+
+@router.post('/favorites/{stallion_id}')
+async def add_a_favorite_stallion(
+    current_user = Depends(get_current_user),
+    stallion_in_db = Depends(get_stallion_in_db),
+    db = Depends(get_db)
+):
+    if "favorite_stallions" in current_user:
+        if stallion_in_db["_id"] in current_user["favorite_stallions"]:
+            raise HTTPException(status_code=422, detail="stallion already in favorites")
+
+        try:
+            db.users.update_one(
+                {"_id": current_user["_id"]},
+                {"$push": {
+                    "favorite_stallions": stallion_in_db["_id"]
+                }}
+            )
+        except Exception as exc:
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    else:
+        try:
+            db.users.update_one(
+                {"_id": current_user["_id"]},
+                {"$set": {
+                    "favorite_stallions": [stallion_in_db["_id"]]
+                }}
+            )
+        except Exception as exc:
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "successfully added stallion to favorites"}
