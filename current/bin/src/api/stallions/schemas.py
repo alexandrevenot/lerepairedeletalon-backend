@@ -249,7 +249,7 @@ class StallionProfileInformation(BaseModel):
     crossbreeding_advice: str
     photos: list[str]
 
-class StallionCompleteProfileInformation(BaseModel):
+class StallionProfileInformationForEdition(BaseModel):
     name: str
     breed: str
     n_sire: str
@@ -273,3 +273,12 @@ class StallionCompleteProfileInformation(BaseModel):
     production_breeds: list[str]
     cover_specs: CoverSpecs
     cover_additional_info: str
+
+class StallionProfileInformationForFavorite(BaseModel):
+    name: str
+    breed: str
+    thumbnail_photo: str
+    profile_status: str
+
+class FavoriteStallions(BaseModel):
+    favorite_stallions: list[str]

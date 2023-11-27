@@ -141,7 +141,7 @@ class StallionsTest(unittest.TestCase):
 
         fake_db.stallions.update_one({"_id": ObjectId(stallion_id)}, {"$set": {"profile_status": "visible"}})
 
-        response = client.get(f'/stallions/stallion/{stallion_id}?mode=partial', headers=headers)
+        response = client.get(f'/stallions/stallion/{stallion_id}?mode=profile', headers=headers)
         self.assertEqual(response.status_code, 200)
         content = response.json()
 
@@ -245,7 +245,7 @@ class StallionsTest(unittest.TestCase):
         nb_of_photos_in_db = len([_ for _ in fake_db.stallion_photos.find()])
         self.assertEqual(nb_of_photos_in_db, 3)
 
-        response = client.get(f'/stallions/stallion/{stallion_id}?mode=partial', headers=headers)
+        response = client.get(f'/stallions/stallion/{stallion_id}?mode=profile', headers=headers)
         self.assertEqual(response.status_code, 200)
         content = response.json()
 
@@ -1022,6 +1022,56 @@ class StallionsTest(unittest.TestCase):
 
         response = client.get('/stallions/search?page=2&limit=-100000')
         self.assertEqual(response.status_code, 422)
+
+        # favorites
+        stallions_it = fake_db.stallions.find()
+        ids = [str(stallion["_id"]) for stallion in stallions_it]
+        first_stallion_id = ids[0]
+        second_stallion_id = ids[1]
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], [])
+
+        response = client.delete(f'/stallions/favorites/{first_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], [])
+
+        response = client.post(f'/stallions/favorites/{first_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], [first_stallion_id])
+
+        # when already in list
+        response = client.post(f'/stallions/favorites/{first_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 422)
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], [first_stallion_id])
+
+        response = client.delete(f'/stallions/favorites/{first_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], [])
+
+        # putting both stallions
+        response = client.post(f'/stallions/favorites/{first_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(f'/stallions/favorites/{second_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], ids)
+
+        response = client.delete(f'/stallions/favorites/{second_stallion_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.get('/stallions/favorites', headers=headers)
+        self.assertEqual(response.json()["favorite_stallions"], [first_stallion_id])
 
     def tearDown(self):
         self.vf.close()
