@@ -7,24 +7,23 @@ import math
 
 from unittest.mock import AsyncMock, patch
 from aioresponses import aioresponses
-
 from fastapi import FastAPI
 from bson.objectid import ObjectId
-
 import mongomock
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
-import src.api.auth.router as auth_router
-import src.api.stallions.router as stallions_router
-import src.api.stallions.utils as stallions_utils
-import src.api.covers.router as covers_router
-import src.api.covers.utils as covers_utils
-import src.api.pricing.router as pricing_router
-import src.api.pricing.utils as pricing_utils
-import src.api.contracts.router as contracts_router
-import src.api.contracts.utils as contracts_utils
+import app.auth.router as auth_router
+import app.stallions.router as stallions_router
+import app.stallions.utils as stallions_utils
+import app.covers.router as covers_router
+import app.covers.utils as covers_utils
+import app.pricing.router as pricing_router
+import app.pricing.utils as pricing_utils
+import app.contracts.router as contracts_router
+import app.contracts.utils as contracts_utils
+import app.users.router as users_router
 
 fake_client = mongomock.MongoClient()
 fake_db = fake_client.main
@@ -40,12 +39,14 @@ server.dependency_overrides[auth_router.get_db] = lambda: fake_db
 server.dependency_overrides[stallions_router.get_db] = lambda: fake_db
 server.dependency_overrides[covers_router.get_db] = lambda: fake_db
 server.dependency_overrides[contracts_router.get_db] = lambda: fake_db
+server.dependency_overrides[users_router.get_db] = lambda: fake_db
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
 server.include_router(covers_router.router)
 server.include_router(contracts_router.router)
 server.include_router(pricing_router.router)
+server.include_router(users_router.router)
 
 client = TestClient(server)
 
@@ -76,16 +77,16 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.ph = open('/lerepairedeletalon/server/current/test/stallions/sellefrançais.jpg', 'rb')
 
         # add a stallion
-        body = {}
+        post_stallion_body = {}
 
-        body["final_fields_body"] = {
+        post_stallion_body["final_fields_body"] = {
             "name": "Michel du Rouet",
             "breed": "Selle Français",
             "n_sire": "65123458X",
             "birthdate": "28/10/1998"
         }
 
-        body["editable_fields_body"] = {
+        post_stallion_body["editable_fields_body"] = {
             "main_desc": "desc",
             "color": "Bai",
             "height": 170,
@@ -148,7 +149,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             ]
         }
 
-        response = client.post('/stallions/stallion', json=body, headers=owner_headers)
+        response = client.post('/stallions/stallion', json=post_stallion_body, headers=owner_headers)
         self.assertEqual(response.status_code, 200)
         stallion_id = response.json()["stallion_id"]
 
@@ -365,10 +366,28 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(response.json()["items"]), 1)
         self.assertEqual(response.json()["items"][0]["price"], 750 - math.ceil(45*1.2))
 
-        # add another cover to check sorting on dates
+        # add another stallion + cover to check sorting on dates
+        post_stallion_body["final_fields_body"]["n_sire"] = "591784564X"
+        post_stallion_body["final_fields_body"]["name"] = "Osef du Chalet"
+
+        response = client.post('/stallions/stallion', json=post_stallion_body, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        second_stallion_id = response.json()["stallion_id"]
+
+        fake_db.stallions.update_many(
+            {},
+            {
+                "$set": {
+                    "profile_status": "visible"
+                }
+            }
+        )
+
+        second_stallion_in_db = fake_db.stallions.find_one({"_id": ObjectId(second_stallion_id)})
+
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
-            "stallion_nsire": "65123458X",
+            "seller_id": str(second_stallion_in_db["owner"]),
+            "stallion_nsire": "591784564X",
             "mare_nsire": "1864896456X",
             "mare_name": "Mauricette",
             "mare_breed": "Boulonnais",
@@ -384,6 +403,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         res_json = response.json()
         self.assertEqual(len(res_json["items"]), 2)
         self.assertEqual(res_json["items"][0]["mare_name"], "Mauricette")
+        second_cover_id = res_json["items"][0]["id"]
 
         # register another user
         response = client.post('/auth/register', json={
@@ -432,7 +452,8 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
         self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
-        self.assertEqual(cover_information_json["contact_name"], "Michel Dupont")
+        self.assertEqual(cover_information_json["contact_firstname"], "Michel")
+        self.assertEqual(cover_information_json["contact_lastname"], "Dupont")
         self.assertEqual(cover_information_json["contact_phone_number"], "")
         self.assertEqual(cover_information_json["contact_email"], "")
         self.assertEqual(cover_information_json["pov"], "buyer")
@@ -455,12 +476,13 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
         self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
-        self.assertEqual(cover_information_json["contact_name"], "Joris Lagraphe")
+        self.assertEqual(cover_information_json["contact_firstname"], "Joris")
+        self.assertEqual(cover_information_json["contact_lastname"], "Lagraphe")
         self.assertEqual(cover_information_json["contact_phone_number"], "+33665824651")
         self.assertEqual(cover_information_json["contact_email"], "lrdeservice2@gmail.com")
         self.assertEqual(cover_information_json["pov"], "seller")
 
-        # notes
+        # scores
         # when wrong user access token: 403
         response = client.put(f"/covers/cover-notes/{cover_id}", json={"notes": "hehe"}, headers=other_user_headers)
         self.assertEqual(response.status_code, 403)
@@ -469,15 +491,15 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         response = client.put(f"/covers/cover-notes/{wrong_cover_id}", json={"notes": "hehe"}, headers=headers)
         self.assertEqual(response.status_code, 404)
 
-        # when ok: modifying buyer notes: 200
+        # when ok: modifying buyer scores: 200
         response = client.put(f"/covers/cover-notes/{cover_id}", json={"notes": "hehe"}, headers=headers)
         self.assertEqual(response.status_code, 200)
 
-        # check that seller notes stayed the same
+        # check that seller scores stayed the same
         response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
         self.assertEqual(response.json()["notes"], "")
 
-        # check that buyer notes indeed changed
+        # check that buyer scores indeed changed
         response = client.get(f'/covers/cover/{cover_id}', headers=headers)
         self.assertEqual(response.json()["notes"], "hehe")
 
@@ -585,7 +607,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         ## SIGNATURE
 
         # mocking contract building method not to actually build and send contract
-        with patch('src.api.contracts.utils.create_and_send_contract', new_callable=AsyncMock) as mock:
+        with patch('app.contracts.utils.create_and_send_contract', new_callable=AsyncMock) as mock:
             mock.return_value=({
                 "data": {
                     "contract": {
@@ -650,7 +672,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "siret": "AYIHBYIUN"
             
         }
-        response = client.put('/auth/contracts-identity', headers=owner_headers, json=body)
+        response = client.put('/users/contractual-identity', headers=owner_headers, json=body)
         self.assertEqual(response.status_code, 200)
 
         body = {
@@ -661,7 +683,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "birthplace": "Ici",
             "citizenship": "fr"
         }
-        response = client.put('/auth/contracts-identity', headers=headers, json=body)
+        response = client.put('/users/contractual-identity', headers=headers, json=body)
         self.assertEqual(response.status_code, 200)
 
         buyer_in_db = fake_db.users.find_one({"email": "lrdeservice2@gmail.com"})
@@ -835,6 +857,67 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["total"], 322)
         self.assertEqual(response.json()["status"], "sellersigned")
 
+        # reviews
+        response = client.get(f'/covers/cover/{cover_id}', headers=headers)
+        seller_id = response.json()["contact_id"]
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=buyer')
+        self.assertEqual(response.status_code, 401)
+
+        for review_pov in ["given", "received"]:
+            for cover_pov in ["buyer", "seller"]:
+                response = client.get(f'/users/reviews/{seller_id}?review_pov={review_pov}&cover_pov={cover_pov}', headers=headers)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["reviews"], [])
+
+        ## wrong current user
+        response = client.post(f'/users/reviews/{seller_id}', json={
+            "cover_id": cover_id,
+            "score": 5,
+            "content": "mdr"
+        }, headers=other_user_headers)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "no permissions to write a review")
+
+        other_user_in_db = fake_db.users.find_one({"email": "lrdeservice3@gmail.com"})
+        other_user_id = str(other_user_in_db["_id"])
+
+        ## wrong target user
+        response = client.post(f'/users/reviews/{other_user_id}', json={
+            "cover_id": cover_id,
+            "score": 5,
+            "content": "mdr"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "no permissions to write a review")
+
+        client_in_db = fake_db.users.find_one({"email": "lrdeservice2@gmail.com"})
+        client_id = str(client_in_db["_id"])
+
+        ## when target is user itself
+        response = client.post(f'/users/reviews/{client_id}', json={
+            "cover_id": cover_id,
+            "score": 5,
+            "content": "mdr"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "user cannot review itself")
+
+        ## when the status is not right
+        response = client.post(f'/users/reviews/{seller_id}', json={
+            "cover_id": cover_id,
+            "score": 5,
+            "content": "mdr"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "cover status does not allow review writing")
+
+        # check that reviews are indeed empty
+        for review_pov in ["given", "received"]:
+            for cover_pov in ["buyer", "seller"]:
+                response = client.get(f'/users/reviews/{seller_id}?review_pov={review_pov}&cover_pov={cover_pov}', headers=headers)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["reviews"], [])
+
         # to be changed in the future
         response = client.post(f'/covers/step-forward-payment/{cover_id}')
         self.assertEqual(response.status_code, 200)
@@ -846,6 +929,418 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["service_fees"], 33)
         self.assertEqual(response.json()["total"], 483)
         self.assertEqual(response.json()["status"], "downpaid")
+
+        ## reviews
+        response = client.post(f'/users/reviews/{seller_id}', json={
+            "cover_id": cover_id,
+            "score": 5,
+            "content": "mdr"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        cover_in_db = fake_db.covers.find_one({"_id": ObjectId(cover_id)})
+
+        seller_in_db = fake_db.users.find_one({"_id": ObjectId(seller_id)})
+        self.assertEqual(seller_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"], 5)
+        self.assertEqual(seller_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"], 1)
+        self.assertEqual(len(seller_in_db["reviews"]["received"]["seller"]), 1)
+
+        # check reviews in db
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=given&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reviews"], [])
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=given&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reviews"], [])
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reviews"], [])
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        cover_in_db = fake_db.covers.find_one({"_id": ObjectId(cover_id)})
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 5)
+        self.assertEqual(review["content"], "mdr")
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=given&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reviews"], [])
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=received&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reviews"], [])
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=received&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reviews"], [])
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=given&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 5)
+        self.assertEqual(review["content"], "mdr")
+
+        ## when cover has already been reviewed
+        response = client.post(f'/users/reviews/{seller_id}', json={
+            "cover_id": cover_id,
+            "score": 1,
+            "content": "pa ouf"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 403)
+
+        # to be changed in the future
+        response = client.post(f'/covers/step-forward-payment/{cover_id}')
+        self.assertEqual(response.status_code, 200)
+
+        ## when cover has already been reviewed by the buyer
+        response = client.post(f'/users/reviews/{seller_id}', json={
+            "cover_id": cover_id,
+            "score": 1,
+            "content": "pa ouf"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 403)
+
+        ## when seller is reviewing
+        response = client.post(f'/users/reviews/{client_id}', json={
+            "cover_id": cover_id,
+            "score": 1,
+            "content": "nulachier"
+        }, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        seller_in_db = fake_db.users.find_one({"_id": ObjectId(seller_id)})
+        self.assertEqual(seller_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"], 5)
+        self.assertEqual(seller_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"], 1)
+        self.assertEqual(len(seller_in_db["reviews"]["received"]["seller"]), 1)
+
+        client_in_db = fake_db.users.find_one({"_id": ObjectId(client_id)})
+        self.assertEqual(client_in_db["buyer_score"], 1)
+        self.assertEqual(len(client_in_db["reviews"]["received"]["buyer"]), 1)
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 5)
+        self.assertEqual(review["content"], "mdr")
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=given&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 1)
+        self.assertEqual(review["content"], "nulachier")
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=given&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=given&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 5)
+        self.assertEqual(review["content"], "mdr")
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=received&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewed_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewer_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 1)
+        self.assertEqual(review["content"], "nulachier")
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=received&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=given&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        # second cover to review
+        response = client.post(f'/covers/step-forward-cover/{second_cover_id}', json={"next_status": "approved"}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        with patch('app.contracts.utils.create_and_send_contract', new_callable=AsyncMock) as mock:
+            mock.return_value=({
+                "data": {
+                    "contract": {
+                        "id": "the_second_contract_id",
+                        "signers": [
+                            {
+                                "email": "lrdeservice2@gmail.com",
+                                "sign_page_url": "first_signer_sign_page_url"
+                            },
+                            {
+                                "email": "lrdeservice@gmail.com",
+                                "sign_page_url": "second_signer_sign_page_url"                        }
+                        ]
+                    }
+                }
+            }, None)
+
+            response = client.get(f'/contracts/sign-page-url/{second_cover_id}', headers=headers)
+            self.assertEqual(response.status_code, 200)
+
+        response = client.post(
+            '/contracts/esignatures-webhook',
+            json={
+                "status": "signer-signed",
+                "data": {
+                    "contract": {
+                        "id": "the_second_contract_id"
+                    },
+                    "signer": {
+                        "signing_order": "1"
+                    }
+                }
+            },
+            headers={"Authorization": f"Bearer {(base64.b64encode((contracts_config['secret-token'] + ':').encode('utf-8'))).decode('utf-8')}"})
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(
+            '/contracts/esignatures-webhook',
+            json={
+                "status": "signer-signed",
+                "data": {
+                    "contract": {
+                        "id": "the_second_contract_id"
+                    },
+                    "signer": {
+                        "signing_order": "2"
+                    }
+                }
+            },
+            headers={"Authorization": f"Bearer {(base64.b64encode((contracts_config['secret-token'] + ':').encode('utf-8'))).decode('utf-8')}"})
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(f'/covers/step-forward-payment/{second_cover_id}')
+        self.assertEqual(response.status_code, 200)
+
+        # posting the second review
+        response = client.post(f'/users/reviews/{client_id}', json={
+            "cover_id": second_cover_id,
+            "score": 2,
+            "content": "david goodenough"
+        }, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+
+        seller_in_db = fake_db.users.find_one({"_id": ObjectId(seller_id)})
+        self.assertEqual(seller_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"], 5)
+        self.assertEqual(seller_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"], 1)
+        self.assertEqual(len(seller_in_db["reviews"]["received"]["seller"]), 1)
+
+        client_in_db = fake_db.users.find_one({"_id": ObjectId(client_id)})
+        self.assertEqual(client_in_db["buyer_score"], 1.5)
+        self.assertEqual(len(client_in_db["reviews"]["received"]["buyer"]), 2)
+
+        # unchanged
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=given&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=received&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=given&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 0)
+
+        second_cover_in_db = fake_db.covers.find_one({"_id": ObjectId(second_cover_id)})
+
+        response = client.get(f'/users/reviews/{client_id}?review_pov=given&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 5)
+        self.assertEqual(review["content"], "mdr")
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=received&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 1)
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewer_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewed_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 5)
+        self.assertEqual(review["content"], "mdr")
+
+        # changed
+        response = client.get(f'/users/reviews/{client_id}?review_pov=received&cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 2)
+
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], second_cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], second_cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewed_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewer_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 2)
+        self.assertEqual(review["content"], "david goodenough")
+
+        review = response.json()["reviews"][1]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewed_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewer_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 1)
+        self.assertEqual(review["content"], "nulachier")
+
+        response = client.get(f'/users/reviews/{seller_id}?review_pov=given&cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["reviews"]), 2)
+
+        review = response.json()["reviews"][0]
+        self.assertEqual(review["stallion_name"], second_cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], second_cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewed_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewer_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 2)
+        self.assertEqual(review["content"], "david goodenough")
+
+        review = response.json()["reviews"][1]
+        self.assertEqual(review["stallion_name"], cover_in_db["stallion_name"])
+        self.assertEqual(review["stallion_nsire"], cover_in_db["stallion_nsire"])
+        self.assertEqual(review["reviewed_firstname"], client_in_db["firstname"])
+        self.assertEqual(review["reviewed_lastname"], client_in_db["lastname"])
+        self.assertEqual(review["reviewer_firstname"], seller_in_db["firstname"])
+        self.assertEqual(review["reviewer_lastname"], seller_in_db["lastname"])
+        self.assertEqual(review["writing_date"], datetime.datetime.now().strftime("le %d/%m/%Y"))
+        self.assertEqual(review["score"], 1)
+        self.assertEqual(review["content"], "nulachier")
+
+        response = client.post(f'/users/reviews/{seller_id}', json={
+            "cover_id": second_cover_id,
+            "score": 4,
+            "content": "plutôt bieng"
+        }, headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        # user-score
+        response = client.get(f'/users/user-score/{seller_id}?cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["firstname"], "Michel")
+        self.assertEqual(response.json()["lastname"], "Dupont")
+        self.assertEqual(response.json()["score"], 4.5)
+        self.assertEqual(response.json()["nb_reviews"], 2)
+        self.assertEqual(response.json()["owner_has_other_reviews"], False)
+
+        response = client.get(f'/users/user-score/{seller_id}?cover_pov=seller&stallion_nsire=591784564X', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["firstname"], "Michel")
+        self.assertEqual(response.json()["lastname"], "Dupont")
+        self.assertEqual(response.json()["score"], 4)
+        self.assertEqual(response.json()["nb_reviews"], 1)
+        self.assertEqual(response.json()["owner_has_other_reviews"], True)
+
+        response = client.get(f'/users/user-score/{client_id}?cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["firstname"], "Joris")
+        self.assertEqual(response.json()["lastname"], "Lagraphe")
+        self.assertEqual(response.json()["score"], 1.5)
+        self.assertEqual(response.json()["nb_reviews"], 2)
+        self.assertEqual(response.json()["owner_has_other_reviews"], False)
+
+        # when such notes do not exist
+        response = client.get(f'/users/user-score/{seller_id}?cover_pov=buyer', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["firstname"], "Michel")
+        self.assertEqual(response.json()["lastname"], "Dupont")
+        self.assertEqual(response.json()["score"], None)
+        self.assertEqual(response.json()["nb_reviews"], None)
+        self.assertEqual(response.json()["owner_has_other_reviews"], False)
+
+        response = client.get(f'/users/user-score/{seller_id}?cover_pov=buyer&stallion_nsire=591784564X', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["firstname"], "Michel")
+        self.assertEqual(response.json()["lastname"], "Dupont")
+        self.assertEqual(response.json()["score"], None)
+        self.assertEqual(response.json()["nb_reviews"], None)
+        self.assertEqual(response.json()["owner_has_other_reviews"], False)
+
+        response = client.get(f'/users/user-score/{client_id}?cover_pov=seller', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["firstname"], "Joris")
+        self.assertEqual(response.json()["lastname"], "Lagraphe")
+        self.assertEqual(response.json()["score"], None)
+        self.assertEqual(response.json()["nb_reviews"], None)
+        self.assertEqual(response.json()["owner_has_other_reviews"], False)
 
     def tearDown(self):
         self.vf.close()

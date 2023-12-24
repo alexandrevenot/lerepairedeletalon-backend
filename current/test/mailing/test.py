@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
-import src.api.auth.router as auth_router
-import src.api.mailing.router as mailing_router
-from src.api.auth.utils import verify_password
+import app.auth.router as auth_router
+import app.mailing.router as mailing_router
+from app.auth.utils import verify_password
 
 fake_client = mongomock.MongoClient()
 fake_db = fake_client.main
