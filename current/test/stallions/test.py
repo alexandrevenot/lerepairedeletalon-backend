@@ -11,10 +11,10 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
-import src.api.auth.router as auth_router
-import src.api.stallions.router as stallions_router
-import src.api.stallions.utils as stallions_utils
-import src.api.pricing.utils as pricing_utils
+import app.auth.router as auth_router
+import app.stallions.router as stallions_router
+import app.stallions.utils as stallions_utils
+import app.pricing.utils as pricing_utils
 
 fake_client = mongomock.MongoClient()
 fake_db = fake_client.main

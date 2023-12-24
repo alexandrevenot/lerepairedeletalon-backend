@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 #from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
-#import src.api.middleware as middleware
+#import app.middleware as middleware
 
 dirs = ["log", "run"]
 for d in dirs:
@@ -14,23 +14,27 @@ for d in dirs:
     if not os.path.isdir(p):
         os.mkdir(p)
 
-import src.api.auth.router as auth_router
-import src.api.stallions.router as stallions_router
-import src.api.covers.router as covers_router
-import src.api.geoloc.router as geoloc_router
-import src.api.pricing.router as pricing_router
-import src.api.contracts.router as contracts_router
-import src.api.admin.router as admin_router
+import app.auth.router as auth_router
+import app.stallions.router as stallions_router
+import app.covers.router as covers_router
+import app.geoloc.router as geoloc_router
+import app.pricing.router as pricing_router
+import app.contracts.router as contracts_router
+import app.users.router as users_router
+import app.mailing.router as mailing_router
+import app.admin.router as admin_router
 
 server = FastAPI()
 
-server.include_router(auth_router.router)
-server.include_router(stallions_router.router)
-server.include_router(covers_router.router)
-server.include_router(geoloc_router.router)
-server.include_router(pricing_router.router)
-server.include_router(contracts_router.router)
-server.include_router(admin_router.router)
+server.include_router(auth_router.router, tags=["Auth"])
+server.include_router(stallions_router.router, tags=["Stallions"])
+server.include_router(covers_router.router, tags=["Covers"])
+server.include_router(geoloc_router.router, tags=["Geoloc"])
+server.include_router(pricing_router.router, tags=["Pricing"])
+server.include_router(contracts_router.router, tags=["Contracts"])
+server.include_router(users_router.router, tags=["Users"])
+server.include_router(mailing_router.router, tags=["Mailing"])
+server.include_router(admin_router.router, tags=["Admin"])
 
 origins = [
     "http://localhost:4200",

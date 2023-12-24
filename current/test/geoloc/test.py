@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
-import src.api.geoloc.router as geoloc_router
-import src.api.geoloc.utils as geoloc_utils
+import app.geoloc.router as geoloc_router
+import app.geoloc.utils as geoloc_utils
 
 server = FastAPI()
 

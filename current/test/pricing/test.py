@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
-import src.api.pricing.router as pricing_router
-import src.api.pricing.utils as pricing_utils
+import app.pricing.router as pricing_router
+import app.pricing.utils as pricing_utils
 
 config = pricing_utils.load_config()
 
