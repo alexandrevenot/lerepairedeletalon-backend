@@ -193,15 +193,17 @@ async def create_and_send_contract(
     })
 
     advance = pricing_utils.calculate_checkout(
-        pricing_utils.calculate_advance(cover_document["subtotal"], cover_document["cover_specs"]["advance_percentage"], True),
+        pricing_utils.calculate_advance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"], False),
         pricing_utils.calculate_advance(cover_document["buyer_fees_ht"], cover_document["cover_specs"]["advance_percentage"], False),
-        pricing_config["TVA_coeff_HT"]
+        pricing_config["TVA_coeff_HT"],
+        pricing_config["TVA_cover_coeff_HT"]
     ).total
 
     balance = pricing_utils.calculate_checkout(
-        pricing_utils.calculate_balance(cover_document["subtotal"], cover_document["cover_specs"]["advance_percentage"], True),
+        pricing_utils.calculate_balance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"], False),
         pricing_utils.calculate_balance(cover_document["buyer_fees_ht"], cover_document["cover_specs"]["advance_percentage"], False),
-        pricing_config["TVA_coeff_HT"]
+        pricing_config["TVA_coeff_HT"],
+        pricing_config["TVA_cover_coeff_HT"]
     ).total
 
     placeholder_fields.append({

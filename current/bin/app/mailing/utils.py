@@ -90,7 +90,6 @@ def send_email_verification_email(
         server.ehlo('Gmail')
         server.starttls()
         server.login(sender_email, password)
-        
         server.sendmail(fromaddr, toaddrs, message.as_string())
 
 def send_password_update_email(
@@ -120,5 +119,4 @@ def send_password_update_email(
         server.ehlo('Gmail')
         server.starttls()
         server.login(sender_email, password)
-        
         server.sendmail(fromaddr, toaddrs, message.as_string())

@@ -4,6 +4,7 @@ import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import SecretStr
+from pymongo.errors import PyMongoError
 
 import app.admin.utils as utils
 import app.stallions.utils as stallion_utils
@@ -45,7 +46,7 @@ async def update_stallion_profile_status(
     ):
     try:
         stallion_in_db = db.stallions.find_one({"n_sire": n_sire})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -66,7 +67,7 @@ async def update_stallion_profile_status(
                     "profile_status": new_status
                 }
             })
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 

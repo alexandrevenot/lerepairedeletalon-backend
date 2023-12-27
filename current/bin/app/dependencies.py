@@ -5,6 +5,7 @@ from typing import Annotated
 import yaml
 from fastapi import HTTPException, Depends, Path, Header
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 import app.auth.utils as auth_utils
 
@@ -24,10 +25,13 @@ class DBConnection:
 def get_db():
     return DBConnection().db
 
+def get_db_client():
+    return DBConnection().client
+
 async def get_user_from_object_id(user_id: ObjectId, db, logger):
     try:
         user_in_db = db.users.find_one({"_id": user_id})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error(f'failed to read db: {traceback.format_exc()}')
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -41,10 +45,10 @@ class UserInDBGetter:
         self.logger = logger
 
     async def __call__(self, user_id: str = Path(...), db = Depends(get_db)):
-        try:
-            user_id = ObjectId(user_id)
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail="user_id not readable") from exc
+        if not ObjectId.is_valid(user_id):
+            raise HTTPException(status_code=422, detail="user_id is not readable")
+
+        user_id = ObjectId(user_id)
 
         return await get_user_from_object_id(user_id, db, self.logger)
 
@@ -56,19 +60,20 @@ class CurrentUserGetter:
         try:
             fields = authorization.split(' ')
             token = fields[1]
-        except Exception as exc:
+        except (IndexError, AttributeError) as exc:
             raise HTTPException(status_code=401, detail='token not found in the request') from exc
 
         _id = auth_utils.verify_token(token, 'access')
 
         try:
             user_in_db = db.users.find_one({'_id': _id})
-        except Exception as exc:
+        except PyMongoError as exc:
             self.logger.error(f'failed to read db: {traceback.format_exc()}')
             raise HTTPException(status_code=500, detail='failed to read db') from exc
 
         if user_in_db is None:
             raise HTTPException(status_code=404, detail='user not found')
+
         return user_in_db
 
 class CoverInDBGetter:
@@ -76,14 +81,14 @@ class CoverInDBGetter:
         self.logger = logger
 
     async def __call__(self, cover_id: str = Path(...), db = Depends(get_db)):
-        try:
-            cover_id = ObjectId(cover_id)
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail="cover_id not readable") from exc
+        if not ObjectId.is_valid(cover_id):
+            raise HTTPException(status_code=422, detail="cover_id not readable")
+
+        cover_id = ObjectId(cover_id)
 
         try:
             cover_in_db = db.covers.find_one({"_id": cover_id})
-        except Exception as exc:
+        except PyMongoError as exc:
             self.logger.error("failed to read db: %s", traceback.format_exc())
             raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -91,3 +96,24 @@ class CoverInDBGetter:
             raise HTTPException(status_code=404, detail="cover not found")
 
         return cover_in_db
+
+class StallionInDBGetter:
+    def __init__(self, logger):
+        self.logger = logger
+
+    async def __call__(self, stallion_id: str = Path(...), db = Depends(get_db)):
+        if not ObjectId.is_valid(stallion_id):
+            raise HTTPException(status_code=422, detail="stallion_id not readable")
+
+        stallion_id = ObjectId(stallion_id)
+
+        try:
+            stallion_in_db = db.stallions.find_one({"_id": stallion_id})
+        except PyMongoError as exc:
+            self.logger.error("failed to read db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to read db") from exc
+
+        if stallion_in_db is None:
+            raise HTTPException(status_code=404, detail="stallion not found")
+
+        return stallion_in_db

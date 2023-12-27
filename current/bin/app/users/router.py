@@ -6,11 +6,12 @@ from datetime import datetime
 from bson.objectid import ObjectId
 
 from fastapi import APIRouter, Depends, HTTPException
+from pymongo.errors import PyMongoError
 
 import app.users.utils as utils
 import app.users.schemas as schemas
 
-from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter
+from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client
 
 # configs
 global_config = utils.load_global_config()
@@ -88,28 +89,29 @@ async def get_account_information(current_user = Depends(get_current_user)):
 
 @router.put('/contractual-identity')
 async def put_contractual_identity(query: schemas.PutContractualIdentityQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
-    try:
-        update = {
-                '$set': {
-                    'contractual_identity': {
-                    }
+    update = {
+            '$set': {
+                'contractual_identity': {
                 }
             }
+        }
 
-        if query.type == 'company':
-            for field in ['type','company_name', 'company_status', 'capital', 'head_office_address', 'siret']:
-                update['$set']['contractual_identity'][field] = getattr(query, field)
-        else:
-            update['$set']['contractual_identity']['type'] = query.type
-
-        for field in ['gender', 'postal_address', 'birthdate', 'birthplace', 'citizenship']:
+    if query.type == 'company':
+        for field in ['type','company_name', 'company_status', 'capital', 'head_office_address', 'siret']:
             update['$set']['contractual_identity'][field] = getattr(query, field)
+    else:
+        update['$set']['contractual_identity']['type'] = query.type
 
+    for field in ['gender', 'postal_address', 'birthdate', 'birthplace', 'citizenship']:
+        update['$set']['contractual_identity'][field] = getattr(query, field)
+
+    try:
         db.users.update_one({'_id': current_user['_id']}, update)
+    except PyMongoError as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail='failed to write db') from exc
 
-        return {'message': 'successfully put profile information'}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail='unable to put profile information') from exc
+    return {'message': 'successfully put profile information'}
 
 @router.get('/reviews/{user_id}', response_model=schemas.Reviews)
 async def get_user_reviews(
@@ -132,7 +134,7 @@ async def get_user_reviews(
 
     try:
         review_cursor = db.reviews.find({"_id": {"$in": [ObjectId(review_id) for review_id in review_ids]}}).sort("writing_date", -1)
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -157,7 +159,8 @@ async def post_user_review(
     query: schemas.ReviewQuery,
     current_user = Depends(get_current_user),
     user_in_db = Depends(UserInDBGetter(logger)),
-    db = Depends(get_db)
+    db = Depends(get_db),
+    db_client = Depends(get_db_client)
 ):
     cover_in_db = await get_cover_in_db(query.cover_id, db)
 
@@ -199,84 +202,86 @@ async def post_user_review(
         "score": query.score
     }
 
-    try:
-        insert_one_result = db.reviews.insert_one(review)
-        inserted_id = insert_one_result.inserted_id
-
-        db.users.update_one(
-            {"_id": current_user["_id"]},
-            {
-                "$push": {
-                    f"reviews.given.{'buyer' if reviewer_is_buyer else 'seller'}": inserted_id
-                }
-            }
-        )
-
-        db.users.update_one(
-            {"_id": user_in_db["_id"]},
-            {
-                "$push": {
-                    f"reviews.received.{'seller' if reviewer_is_buyer else 'buyer'}": inserted_id
-                }
-            }
-        )
-
-        reviewed_pov = 'seller' if reviewer_is_buyer else 'buyer'
-        if reviewed_pov == 'buyer':
+    with db_client.start_session() as session:
+        with session.start_transaction():
             try:
-                len_old_reviews_list = len(user_in_db["reviews"]["received"]["buyer"])
-            except KeyError:
-                len_old_reviews_list = 0
+                insert_one_result = db.reviews.insert_one(review)
+                inserted_id = insert_one_result.inserted_id
 
-            try:
-                old_buyer_score = user_in_db["buyer_score"]
-            except KeyError:
-                old_buyer_score = 0
-
-            new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
-
-            db.users.update_one(
-                {"_id": user_in_db["_id"]},
-                {
-                    "$set": {
-                        "buyer_score": new_average_score
+                db.users.update_one(
+                    {"_id": current_user["_id"]},
+                    {
+                        "$push": {
+                            f"reviews.given.{'buyer' if reviewer_is_buyer else 'seller'}": inserted_id
+                        }
                     }
-                }
-            )
-        else:
-            try:
-                len_old_reviews_list = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"]
-            except KeyError:
-                len_old_reviews_list = 0
+                )
 
-            try:
-                old_buyer_score = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"]
-            except KeyError:
-                old_buyer_score = 0
-
-            new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
-
-            db.users.update_one(
-                {"_id": user_in_db["_id"]},
-                {
-                    "$set": {
-                        f"seller_score.{cover_in_db['stallion_nsire']}.avg_score": new_average_score,
-                        f"seller_score.{cover_in_db['stallion_nsire']}.nb": len_old_reviews_list + 1
+                db.users.update_one(
+                    {"_id": user_in_db["_id"]},
+                    {
+                        "$push": {
+                            f"reviews.received.{'seller' if reviewer_is_buyer else 'buyer'}": inserted_id
+                        }
                     }
-                }
-            )
+                )
 
-        db.covers.update_one(
-            {"_id": cover_in_db["_id"]},
-            {
-                "$set": {
-                    f"reviewed_by_{'buyer' if reviewer_is_buyer else 'seller'}": True
-                }
-            }
-        )
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
+                reviewed_pov = 'seller' if reviewer_is_buyer else 'buyer'
+                if reviewed_pov == 'buyer':
+                    try:
+                        len_old_reviews_list = len(user_in_db["reviews"]["received"]["buyer"])
+                    except KeyError:
+                        len_old_reviews_list = 0
+
+                    try:
+                        old_buyer_score = user_in_db["buyer_score"]
+                    except KeyError:
+                        old_buyer_score = 0
+
+                    new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
+
+                    db.users.update_one(
+                        {"_id": user_in_db["_id"]},
+                        {
+                            "$set": {
+                                "buyer_score": new_average_score
+                            }
+                        }
+                    )
+                else:
+                    try:
+                        len_old_reviews_list = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"]
+                    except KeyError:
+                        len_old_reviews_list = 0
+
+                    try:
+                        old_buyer_score = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"]
+                    except KeyError:
+                        old_buyer_score = 0
+
+                    new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
+
+                    db.users.update_one(
+                        {"_id": user_in_db["_id"]},
+                        {
+                            "$set": {
+                                f"seller_score.{cover_in_db['stallion_nsire']}.avg_score": new_average_score,
+                                f"seller_score.{cover_in_db['stallion_nsire']}.nb": len_old_reviews_list + 1
+                            }
+                        }
+                    )
+
+                db.covers.update_one(
+                    {"_id": cover_in_db["_id"]},
+                    {
+                        "$set": {
+                            f"reviewed_by_{'buyer' if reviewer_is_buyer else 'seller'}": True
+                        }
+                    }
+                )
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "reviewed cover successfully"}
 

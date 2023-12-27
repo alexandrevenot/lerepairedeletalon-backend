@@ -12,6 +12,6 @@ class Checkout(BaseModel):
     status: str
 
 class CoverPaymentDetails(BaseModel):
-    subtotal: int
+    subtotal_ht: int
     buyer_fees_ht: float
     seller_fees_ht: float

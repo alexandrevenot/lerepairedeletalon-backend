@@ -3,22 +3,24 @@ import os
 import sys
 
 from fastapi import FastAPI
-
-import mongomock
 from fastapi.testclient import TestClient
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
+from context import fake_db, get_db, get_db_client
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
 import app.auth.router as auth_router
 import app.users.router as users_router
 
-fake_client = mongomock.MongoClient()
-fake_db = fake_client.main
-
 server = FastAPI()
 
-server.dependency_overrides[auth_router.get_db] = lambda: fake_db
-server.dependency_overrides[users_router.get_db] = lambda: fake_db
+server.dependency_overrides[auth_router.get_db] = get_db
+server.dependency_overrides[users_router.get_db] = get_db
+
+server.dependency_overrides[auth_router.get_db_client] = get_db_client
+server.dependency_overrides[users_router.get_db_client] = get_db_client
 
 server.include_router(auth_router.router)
 server.include_router(users_router.router)

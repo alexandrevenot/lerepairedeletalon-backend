@@ -2,16 +2,17 @@ import os
 import logging
 import logging.handlers
 import traceback
-from typing import Annotated
+import smtplib
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
+from pymongo.errors import PyMongoError
 
 import app.auth.utils as utils
 import app.auth.schemas as schemas
 
 import app.mailing.utils as mailing_utils
 
-from app.dependencies import get_db
+from app.dependencies import get_db, get_db_client
 
 # configs
 global_config = utils.load_global_config()
@@ -36,74 +37,76 @@ logger.info('Logger initialized')
 router = APIRouter(prefix='/auth')
 
 @router.post('/register')
-async def register(user: schemas.RegisterQuery, db = Depends(get_db)):
+async def register(user: schemas.RegisterQuery, db = Depends(get_db), db_client = Depends(get_db_client)):
     try:
         user_in_db = db.users.find_one({'email': user.email})
-    except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+    except PyMongoError as exc:
+        logger.error('failed to read db: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if user_in_db is not None:
         raise HTTPException(status_code=400, detail='a user already exists with this email')
-    else:
-        user_to_create = schemas.UserInDB(
-            firstname = user.firstname,
-            lastname = user.lastname,
-            email = user.email,
-            phone_number = user.phone_number,
-            hashedpassword = utils.get_password_hash(user.password),
-            email_is_verified = False
-        )
 
-        try:
-            db.users.insert_one(user_to_create.model_dump())
+    user_to_create = schemas.UserInDB(
+        firstname = user.firstname,
+        lastname = user.lastname,
+        email = user.email,
+        phone_number = user.phone_number,
+        hashedpassword = utils.get_password_hash(user.password),
+        email_is_verified = False
+    )
 
-        except Exception as exc:
-            logger.error(f'failed to write db: {traceback.format_exc()}')
-            raise HTTPException(status_code=500, detail='failed to write db') from exc
-        
-        try:
-            code = utils.generate_sensitive_action_code(user.email, os.urandom(16).hex())
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.users.insert_one(user_to_create.model_dump())
 
-            db.email_verification_codes.insert_one({
-                "email": user.email,
-                "code": code
-            })
+                code = utils.generate_sensitive_action_code(user.email, os.urandom(16).hex())
 
-            mailing_utils.send_email_verification_email(
-                f"{user.firstname} {user.lastname}",
-                global_config["company_name"],
-                mailing_config["logo_url"],
-                f"{global_config['frontend_url']}{mailing_config['email_verification_route']}?code={code}",
-                mailing_config["service_email"],
-                mailing_config["password"],
-                mailing_config["service_email"],
-                user.email
-            )
-            return {'message': 'successfully registered user'}
-        except Exception as exc:
-            logger.error(f'failed to send email verification email: {traceback.format_exc()}')
-            raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+                db.email_verification_codes.insert_one({
+                    "email": user.email,
+                    "code": code
+                })
 
+                mailing_utils.send_email_verification_email(
+                    f"{user.firstname} {user.lastname}",
+                    global_config["company_name"],
+                    mailing_config["logo_url"],
+                    f"{global_config['frontend_url']}{mailing_config['email_verification_route']}?code={code}",
+                    mailing_config["service_email"],
+                    mailing_config["password"],
+                    mailing_config["service_email"],
+                    user.email
+                )
+
+            except PyMongoError as exc:
+                logger.error('failed to write db: %s', traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+            except smtplib.SMTPException as exc:
+                logger.error('failed to send email verification email: %s', traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+
+    return {'message': 'successfully registered user'}
 
 @router.post('/login')
 async def login(user: schemas.LoginQuery, db = Depends(get_db)):
     try:
         user_in_db = db.users.find_one({'email': user.email})
-    except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+    except PyMongoError as exc:
+        logger.error('failed to read db: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
-    
+
     if user_in_db is None:
         raise HTTPException(status_code=404, detail='user not found')
 
     if not utils.verify_password(user.password, user_in_db['hashedpassword']):
         raise HTTPException(status_code=401, detail='invalid credentials')
-    else:
-        return {
-            'accessToken': utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
-            'refreshToken': utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
-        }
+
+    return {
+        'accessToken': utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
+        'refreshToken': utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
+    }
 
 @router.post('/refresh-token')
 async def refresh_token(query: schemas.RefreshTokenQuery, db = Depends(get_db)):
@@ -111,8 +114,8 @@ async def refresh_token(query: schemas.RefreshTokenQuery, db = Depends(get_db)):
 
     try:
         user_in_db = db.users.find_one({'_id': _id})
-    except Exception as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+    except PyMongoError as exc:
+        logger.error('failed to read db: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if user_in_db is None:

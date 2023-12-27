@@ -9,8 +9,11 @@ from unittest.mock import AsyncMock, patch
 from aioresponses import aioresponses
 from fastapi import FastAPI
 from bson.objectid import ObjectId
-import mongomock
 from fastapi.testclient import TestClient
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
+from context import fake_db, get_db, get_db_client
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
@@ -25,9 +28,6 @@ import app.contracts.router as contracts_router
 import app.contracts.utils as contracts_utils
 import app.users.router as users_router
 
-fake_client = mongomock.MongoClient()
-fake_db = fake_client.main
-
 stallions_config = stallions_utils.load_config()
 pricing_config = pricing_utils.load_config()
 config = covers_utils.load_config()
@@ -35,11 +35,16 @@ contracts_config = contracts_utils.load_config()
 
 server = FastAPI()
 
-server.dependency_overrides[auth_router.get_db] = lambda: fake_db
-server.dependency_overrides[stallions_router.get_db] = lambda: fake_db
-server.dependency_overrides[covers_router.get_db] = lambda: fake_db
-server.dependency_overrides[contracts_router.get_db] = lambda: fake_db
-server.dependency_overrides[users_router.get_db] = lambda: fake_db
+server.dependency_overrides[auth_router.get_db] = get_db
+server.dependency_overrides[stallions_router.get_db] = get_db
+server.dependency_overrides[covers_router.get_db] = get_db
+server.dependency_overrides[contracts_router.get_db] = get_db
+server.dependency_overrides[users_router.get_db] = get_db
+
+server.dependency_overrides[auth_router.get_db_client] = get_db_client
+server.dependency_overrides[stallions_router.get_db_client] = get_db_client
+server.dependency_overrides[contracts_router.get_db_client] = get_db_client
+server.dependency_overrides[users_router.get_db_client] = get_db_client
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
@@ -335,7 +340,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         for timestamp in cover_in_db["timestamps"]["timestamps_list"][1:]:
             self.assertIsNone(timestamp["timestamp"])
         self.assertEqual(cover_in_db["provided_cover_place"], "ici")
-        self.assertEqual(cover_in_db["subtotal"], 750)
+        self.assertEqual(cover_in_db["subtotal_ht"], 750)
         self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
         self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
         self.assertEqual(cover_in_db["cover_specs"]["advance_percentage"], 40)
@@ -351,7 +356,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=buyer', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 1)
-        self.assertEqual(response.json()["items"][0]["price"], 750 + math.ceil(45*1.2))
+        self.assertEqual(response.json()["items"][0]["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) + math.ceil(45*1.2))
 
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=buyer', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
@@ -364,7 +369,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=seller', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 1)
-        self.assertEqual(response.json()["items"][0]["price"], 750 - math.ceil(45*1.2))
+        self.assertEqual(response.json()["items"][0]["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) - math.ceil(45*1.2))
 
         # add another stallion + cover to check sorting on dates
         post_stallion_body["final_fields_body"]["n_sire"] = "591784564X"
@@ -448,7 +453,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["cover_type"], "iac")
         self.assertEqual(cover_information_json["provided_cover_place"], "ici")
         self.assertEqual(cover_information_json["status"], "requested")
-        self.assertEqual(cover_information_json["price"], 750 + math.ceil(45*1.2))
+        self.assertEqual(cover_information_json["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) + math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
         self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
@@ -472,7 +477,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["cover_type"], "iac")
         self.assertEqual(cover_information_json["provided_cover_place"], "ici")
         self.assertEqual(cover_information_json["status"], "requested")
-        self.assertEqual(cover_information_json["price"], 750 - math.ceil(45*1.2))
+        self.assertEqual(cover_information_json["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) - math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
         self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
@@ -513,7 +518,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["price"], 300 - math.ceil(0.06 * 300 * 1.2))
+        self.assertEqual(response.json()["price"], math.ceil(300*(1+pricing_config["TVA_cover_coeff_HT"])) - math.ceil(0.06 * 300 * 1.2))
 
         response = client.put(f'/covers/cover/{cover_id}', json={"arrival_date": "28/10/1998"}, headers=owner_headers)
         self.assertEqual(response.status_code, 403)
@@ -711,9 +716,9 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         for elt in sent_body["placeholder_fields"]:
             placeholders[elt["api_key"]] = elt["value"]
         
-        self.assertEqual(placeholders["down_payment"], pricing_utils.calculate_advance(cover_in_db["subtotal"], cover_in_db["cover_specs"]["advance_percentage"], True) \
+        self.assertEqual(placeholders["down_payment"], math.ceil(1.055 * pricing_utils.calculate_advance(cover_in_db["subtotal_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)) \
             + math.ceil(1.2 * pricing_utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)))
-        self.assertEqual(placeholders["last_payment"], pricing_utils.calculate_balance(cover_in_db["subtotal"], cover_in_db["cover_specs"]["advance_percentage"], True) \
+        self.assertEqual(placeholders["last_payment"], math.ceil(1.055 * pricing_utils.calculate_balance(cover_in_db["subtotal_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)) \
             + math.ceil(1.2 * pricing_utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)))
 
         # testing webhooks
@@ -852,9 +857,9 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         # when ok
         response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["subtotal"], 300)
+        self.assertEqual(response.json()["subtotal"], 317)
         self.assertEqual(response.json()["service_fees"], 22)
-        self.assertEqual(response.json()["total"], 322)
+        self.assertEqual(response.json()["total"], 339)
         self.assertEqual(response.json()["status"], "sellersigned")
 
         # reviews
@@ -925,9 +930,9 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         # balance checkout
         response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["subtotal"], 450)
+        self.assertEqual(response.json()["subtotal"], 475)
         self.assertEqual(response.json()["service_fees"], 33)
-        self.assertEqual(response.json()["total"], 483)
+        self.assertEqual(response.json()["total"], 508)
         self.assertEqual(response.json()["status"], "downpaid")
 
         ## reviews

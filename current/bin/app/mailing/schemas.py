@@ -6,3 +6,6 @@ class SendPasswordUpdateEmailQuery(BaseModel):
 class UpdatePasswordQuery(BaseModel):
     new_password: str
     code: str
+
+class VerifyEmailQuery(BaseModel):
+    code: str
