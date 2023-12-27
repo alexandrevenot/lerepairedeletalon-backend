@@ -3,9 +3,11 @@ import os
 import sys
 
 from fastapi import FastAPI
-
-import mongomock
 from fastapi.testclient import TestClient
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
+from context import fake_db, get_db, get_db_client
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
@@ -13,13 +15,13 @@ import app.auth.router as auth_router
 import app.mailing.router as mailing_router
 from app.auth.utils import verify_password
 
-fake_client = mongomock.MongoClient()
-fake_db = fake_client.main
-
 server = FastAPI()
 
-server.dependency_overrides[auth_router.get_db] = lambda: fake_db
-server.dependency_overrides[mailing_router.get_db] = lambda: fake_db
+server.dependency_overrides[auth_router.get_db] = get_db
+server.dependency_overrides[mailing_router.get_db] = get_db
+
+server.dependency_overrides[auth_router.get_db_client] = get_db_client
+server.dependency_overrides[mailing_router.get_db_client] = get_db_client
 
 server.include_router(auth_router.router)
 server.include_router(mailing_router.router)
@@ -56,7 +58,7 @@ class MailingTest(unittest.TestCase):
         self.assertFalse(user_in_db["email_is_verified"])
 
         # verify the email address manually
-        response = client.put(f'/mailing/verify-email-address?code={email_verification_code_in_db["code"]}')
+        response = client.put('/mailing/verify-email-address', json = {"code": email_verification_code_in_db["code"]})
         self.assertEqual(response.status_code, 200)
 
         # assert that the code no longer exists
@@ -104,7 +106,7 @@ class MailingTest(unittest.TestCase):
         self.assertFalse(second_code == first_code)
 
         # verify the email address manually
-        response = client.put(f'/mailing/verify-email-address?code={second_code}')
+        response = client.put('/mailing/verify-email-address', json = {"code": second_code})
         self.assertEqual(response.status_code, 200)
 
         # assert that the code no longer exists
@@ -116,33 +118,33 @@ class MailingTest(unittest.TestCase):
         self.assertTrue(user_in_db is not None)
         self.assertTrue(user_in_db["email_is_verified"])
 
-        # send password recovery email when the email is not in the db
-        response = client.post("/mailing/send-password-recovery-email", json={"email": "ounga bounga"})
+        # send password update email when the email is not in the db
+        response = client.post("/mailing/send-password-update-email", json={"email": "ounga bounga"})
         self.assertEqual(response.status_code, 404)
 
-        response = client.post("/mailing/send-password-recovery-email", json={"email": "lrdeservice@gmail.com"})
+        response = client.post("/mailing/send-password-update-email", json={"email": "lrdeservice@gmail.com"})
         self.assertEqual(response.status_code, 200)
 
-        code_in_db = fake_db.password_recovery_codes.find_one({"email": "lrdeservice@gmail.com"})
+        code_in_db = fake_db.password_update_codes.find_one({"email": "lrdeservice@gmail.com"})
         self.assertTrue(code_in_db is not None)
 
-        # recovering the password
+        # updating the password
 
-        # assert that when the code is wrong, 404 is returned, the code document is still here and the password remains the same
-        response = client.put("/mailing/recover-password", json={
+        # assert that when the code is wrong, 403 is returned, the code document is still here and the password remains the same
+        response = client.put("/mailing/update-password", json={
             "new_password": "eheh",
             "code": "not the right code"
         })
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 403)
 
         user_in_db = fake_db.users.find_one({"email": "lrdeservice@gmail.com"})
         self.assertFalse(verify_password('eheh', user_in_db["hashedpassword"]))
 
-        code_in_db = fake_db.password_recovery_codes.find_one({"email": "lrdeservice@gmail.com"})
+        code_in_db = fake_db.password_update_codes.find_one({"email": "lrdeservice@gmail.com"})
         self.assertTrue(code_in_db is not None)
 
         # assert that when the code is the right one, the password has actually changed and the code document is gone
-        response = client.put("/mailing/recover-password", json={
+        response = client.put("/mailing/update-password", json={
             "new_password": "eheh",
             "code": code_in_db["code"]
         })
@@ -152,7 +154,7 @@ class MailingTest(unittest.TestCase):
         user_in_db = fake_db.users.find_one({"email": "lrdeservice@gmail.com"})
         self.assertTrue(verify_password('eheh', user_in_db["hashedpassword"]))
 
-        code_in_db = fake_db.password_recovery_codes.find_one({"email": "lrdeservice@gmail.com"})
+        code_in_db = fake_db.password_update_codes.find_one({"email": "lrdeservice@gmail.com"})
         self.assertTrue(code_in_db is None)
 
 if __name__ == '__main__':

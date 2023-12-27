@@ -2,13 +2,15 @@ import os
 import logging
 import logging.handlers
 import traceback
+import smtplib
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException
+from pymongo.errors import PyMongoError
 
 import app.mailing.utils as utils
 import app.mailing.schemas as schemas
 
-from app.dependencies import get_db, CurrentUserGetter
+from app.dependencies import get_db, CurrentUserGetter, get_db_client
 from app.auth.utils import generate_sensitive_action_code, get_password_hash
 
 # configs
@@ -36,136 +38,139 @@ get_current_user = CurrentUserGetter(logger)
 router = APIRouter(prefix='/mailing')
 
 @router.put('/verify-email-address')
-async def verify_email_address(code: str, db = Depends(get_db)):
+async def verify_email_address(query: schemas.VerifyEmailQuery, db = Depends(get_db), db_client = Depends(get_db_client)):
     try:
-        document = db.email_verification_codes.find_one({'code': code})
-    except Exception as exc:
+        document = db.email_verification_codes.find_one({'code': query.code})
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if document is None:
-        raise HTTPException(status_code=404, detail='cant find code')
+        raise HTTPException(status_code=403, detail='invalid email verifying code')
 
-    try:
-        db.users.update_one(
-            {'email': document["email"]},
-            {"$set": {
-                "email_is_verified": True
-            }}
-            )
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.users.update_one(
+                    {'email': document["email"]},
+                    {"$set": {
+                        "email_is_verified": True
+                    }}
+                    )
 
-    except Exception as exc:
-        logger.error("failed to read db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to write db') from exc
+                db.email_verification_codes.delete_one({'code': query.code})
 
-    try:
-        db.email_verification_codes.delete_one({'code': code})
-    except Exception as exc:
-        logger.error("failed to read db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to write db') from exc
+            except PyMongoError as exc:
+                logger.error("failed to read db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+    return {"message": "successfully verified email"}
 
 @router.post('/send-email-verification-email')
-async def post_send_email_verification_email(current_user = Depends(get_current_user), db = Depends(get_db)):
+async def post_send_email_verification_email(current_user = Depends(get_current_user), db = Depends(get_db), db_client = Depends(get_db_client)):
     if current_user["email_is_verified"]:
         raise HTTPException(status_code=400, detail='email already verified for this user')
 
-    try:
-        db.email_verification_codes.delete_one({'email': current_user["email"]})
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to write db') from exc
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.email_verification_codes.delete_one({'email': current_user["email"]})
 
-    try:
-        code = generate_sensitive_action_code(current_user["email"], os.urandom(16).hex())
+                code = generate_sensitive_action_code(current_user["email"], os.urandom(16).hex())
 
-        db.email_verification_codes.insert_one({
-            "email": current_user["email"],
-            "code": code
-        })
+                db.email_verification_codes.insert_one({
+                    "email": current_user["email"],
+                    "code": code
+                })
 
-        utils.send_email_verification_email(
-            f"{current_user['firstname']} {current_user['lastname']}",
-            global_config["company_name"],
-            config["logo_url"],
-            f"{global_config['frontend_url']}{config['email_verification_route']}?code={code}",
-            config["service_email"],
-            config["password"],
-            config["service_email"],
-            current_user["email"]
-        )
-        return {'message': 'successfully sent email verification email'}
-    except Exception as exc:
-        logger.error("failed to send email verification email: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+                utils.send_email_verification_email(
+                    f"{current_user['firstname']} {current_user['lastname']}",
+                    global_config["company_name"],
+                    config["logo_url"],
+                    f"{global_config['frontend_url']}{config['email_verification_route']}?code={code}",
+                    config["service_email"],
+                    config["password"],
+                    config["service_email"],
+                    current_user["email"]
+                )
+            except PyMongoError as exc:
+                logger.error('failed to write db: %s', traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+            except smtplib.SMTPException as exc:
+                logger.error('failed to send email verification email: %s', traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+
+    return {'message': 'successfully sent email verification email'}
 
 @router.post('/send-password-update-email')
-async def send_password_update_email(query: schemas.SendPasswordUpdateEmailQuery, db = Depends(get_db)):
+async def send_password_update_email(query: schemas.SendPasswordUpdateEmailQuery, db = Depends(get_db), db_client = Depends(get_db_client)):
     try:
         user_in_db = db.users.find_one({"email": query.email})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error('failed to write db: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if user_in_db is None:
         raise HTTPException(status_code=404, detail='user not found')
 
-    try:
-        db.password_update_codes.delete_one({'email': query.email})
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to write db') from exc
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.password_update_codes.delete_one({'email': query.email})
 
-    try:
-        code = generate_sensitive_action_code(query.email, os.urandom(16).hex())
+                code = generate_sensitive_action_code(query.email, os.urandom(16).hex())
 
-        db.password_update_codes.insert_one({
-            "email": query.email,
-            "code": code
-        })
+                db.password_update_codes.insert_one({
+                    "email": query.email,
+                    "code": code
+                })
 
-        utils.send_password_update_email(
-            f"{user_in_db['firstname']} {user_in_db['lastname']}",
-            global_config["company_name"],
-            config["logo_url"],
-            f"{global_config['frontend_url']}{config['password_update_page']}?code={code}",
-            config["service_email"],
-            config["password"],
-            config["service_email"],
-            query.email
-        )
-    except Exception as exc:
-        logger.error("failed to send password update email: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to send password update email') from exc
+                utils.send_password_update_email(
+                    f"{user_in_db['firstname']} {user_in_db['lastname']}",
+                    global_config["company_name"],
+                    config["logo_url"],
+                    f"{global_config['frontend_url']}{config['password_update_page']}?code={code}",
+                    config["service_email"],
+                    config["password"],
+                    config["service_email"],
+                    query.email
+                )
+            except PyMongoError as exc:
+                logger.error('failed to write db: %s', traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+            except smtplib.SMTPException as exc:
+                logger.error('failed to send password update email: %s', traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to send password update email') from exc
 
     return {'message': 'successfully sent password update email'}
 
 @router.put('/update-password')
-async def update_password(query: schemas.UpdatePasswordQuery, db = Depends(get_db)):
+async def update_password(query: schemas.UpdatePasswordQuery, db = Depends(get_db), db_client = Depends(get_db_client)):
     try:
         document = db.password_update_codes.find_one({'code': query.code})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if document is None:
         raise HTTPException(status_code=403, detail='invalid password update code')
 
-    try:
-        db.users.update_one(
-            {'email': document["email"]},
-            {"$set": {
-                "hashedpassword": get_password_hash(query.new_password)
-            }}
-        )
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.users.update_one(
+                    {'email': document["email"]},
+                    {"$set": {
+                        "hashedpassword": get_password_hash(query.new_password)
+                    }}
+                )
 
-    except Exception as exc:
-        logger.error("failed to read db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to write db') from exc
+                db.password_update_codes.delete_one({'code': query.code})
 
-    try:
-        db.password_update_codes.delete_one({'code': query.code})
-    except Exception as exc:
-        logger.error("failed to read db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to write db') from exc
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail='failed to write db') from exc
 
     return {"message": "successfully updated password"}

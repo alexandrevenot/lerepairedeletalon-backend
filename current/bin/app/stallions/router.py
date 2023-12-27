@@ -7,13 +7,14 @@ from datetime import datetime
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Path
 from fastapi.responses import Response
+from pymongo.errors import PyMongoError
 
 import app.stallions.utils as utils
 import app.stallions.schemas as schemas
 import app.geoloc.utils as geoloc_utils
 import app.pricing.utils as pricing_utils
 
-from app.dependencies import get_db, CurrentUserGetter
+from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client
 
 # configs
 global_config = utils.load_global_config()
@@ -36,6 +37,7 @@ logger.info('Logger initialized')
 
 # dependencies
 get_current_user = CurrentUserGetter(logger)
+get_stallion_in_db = StallionInDBGetter(logger)
 
 # routes
 router = APIRouter(prefix='/stallions')
@@ -75,11 +77,23 @@ async def search(
     # price
     price_query = {}
     if min_price is not None:
-        min_price = pricing_utils.calculate_corresponding_subtotal(min_price, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'], pricing_config['TVA_coeff_HT'])
+        min_price = pricing_utils.calculate_corresponding_subtotal(
+            min_price,
+            pricing_config['buyer_fees_coeff'],
+            pricing_config['buyer_fees_offset'],
+            pricing_config['TVA_coeff_HT'],
+            pricing_config['TVA_cover_coeff_HT'],
+            "min")
         price_query["$gte"] = min_price
 
     if max_price is not None:
-        max_price = pricing_utils.calculate_corresponding_subtotal(max_price, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'], pricing_config['TVA_coeff_HT'])
+        max_price = pricing_utils.calculate_corresponding_subtotal(
+            max_price,
+            pricing_config['buyer_fees_coeff'],
+            pricing_config['buyer_fees_offset'],
+            pricing_config['TVA_coeff_HT'],
+            pricing_config['TVA_cover_coeff_HT'],
+            "max")
         price_query["$lte"] = max_price
 
     if price_query:
@@ -130,7 +144,7 @@ async def search(
 
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "city": 1, "dep_name": 1, "reg_name": 1, "cover_specs": 1, "thumbnail_photo": 1, "height": 1}).skip((page - 1) * limit).limit(limit)
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
@@ -151,28 +165,11 @@ async def search(
         ))
     return schemas.SearchRM(content=mp_l)
 
-async def get_stallion_in_db(stallion_id: str = Path(...), db = Depends(get_db)):
-    try:
-        stallion_id = ObjectId(stallion_id)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="stallion_id not readable") from exc
-
-    try:
-        stallion_in_db = db.stallions.find_one({"_id": stallion_id})
-    except Exception as exc:
-        logger.error("failed to read db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to read db") from exc
-
-    if stallion_in_db is None:
-        raise HTTPException(status_code=404, detail="stallion not found")
-
-    return stallion_in_db
-
 @router.get('/stallion-photo/{photo_id}')
 async def get_stallion_photo(photo_id, db = Depends(get_db)):
     try:
         photo = db.stallion_photos.find_one({"_id": ObjectId(photo_id)})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
@@ -181,6 +178,7 @@ async def get_stallion_photo(photo_id, db = Depends(get_db)):
 
     image_data = photo["data"]
     image_content_type = photo["content_type"]
+
     return Response(content=image_data, media_type=image_content_type)
 
 @router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformationForFavorite | schemas.StallionProfileInformation | schemas.StallionProfileInformationForEdition)
@@ -253,7 +251,7 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
 
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "thumbnail_photo": 1, "profile_status": 1, "last_update_timestamp":1})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
@@ -280,7 +278,7 @@ async def register_new_stallion(
     # fields parsing
     try:
         birthdate_datetime = datetime.strptime(final_fields_body.birthdate, "%d/%m/%Y")
-    except Exception as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail="incorrect birth_date date format") from exc
 
     location = {
@@ -302,7 +300,7 @@ async def register_new_stallion(
     # add to db
     try:
         stallion_in_db = db.stallions.find_one({"n_sire": final_fields_body.n_sire})
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -338,7 +336,7 @@ async def register_new_stallion(
             "profile_status": "to_be_validated",
             "last_update_timestamp": datetime.now()
         })
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -411,7 +409,7 @@ async def register_new_stallion_files(
                 "last_update_timestamp": datetime.now()
             }
         })
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -424,7 +422,6 @@ async def edit_stallion_profile(
     current_user = Depends(get_current_user),
     db = Depends(get_db)
 ):
-
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can edit stallion")
 
@@ -472,7 +469,7 @@ async def edit_stallion_profile(
                 "last_update_timestamp": datetime.now()
             }
         })
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -483,7 +480,8 @@ async def update_stallion_photos(
     photos: Annotated[list[UploadFile], File()],
     stallion_in_db = Depends(get_stallion_in_db),
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db = Depends(get_db),
+    db_client = Depends(get_db_client)
 ):
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can update stallion photos")
@@ -516,62 +514,58 @@ async def update_stallion_photos(
         }
         photo_obj_list.append(p)
 
-    try:
-        db.stallion_photos.delete_many({
-            "_id": {
-                "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
-            }
-        })
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.stallion_photos.delete_many({
+                    "_id": {
+                        "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
+                    }
+                })
 
-    try:
-        db.stallions.update_one({
-            "_id": stallion_in_db["_id"]
-        },
-        {
-            "$set": {
-                "thumbnail_photo": db.stallion_photos.insert_one(thumbnail_photo).inserted_id,
-                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
-                "last_update_timestamp": datetime.now()
-            }
-        })
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
+                db.stallions.update_one({
+                    "_id": stallion_in_db["_id"]
+                },
+                {
+                    "$set": {
+                        "thumbnail_photo": db.stallion_photos.insert_one(thumbnail_photo).inserted_id,
+                        "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
+                        "last_update_timestamp": datetime.now()
+                    }
+                })
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "successfully updated stallion photos"}
 
-
 @router.delete('/stallion/{stallion_id}')
-async def delete_stallion(stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
+async def delete_stallion(
+    stallion_in_db = Depends(get_stallion_in_db),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db),
+    db_client = Depends(get_db_client)
+    ):
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can delete stallion")
 
-    if "photos" in stallion_in_db:
-        try:
-            db.stallion_photos.delete_many({
-                "_id": {
-                    "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
-                }
-            })
-        except Exception as exc:
-            logger.error("failed to write db: %s", traceback.format_exc())
-            raise HTTPException(status_code=500, detail="failed to write db") from exc
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                if "photos" in stallion_in_db:
+                    db.stallion_photos.delete_many({
+                        "_id": {
+                            "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
+                        }
+                    })
 
-    if "verification_file" in stallion_in_db:
-        try:
-            db.verification_files.delete_one({"_id": stallion_in_db["verification_file"]})
-        except Exception as exc:
-            logger.error("failed to write db: %s", traceback.format_exc())
-            raise HTTPException(status_code=500, detail="failed to write db") from exc
+                if "verification_file" in stallion_in_db:
+                    db.verification_files.delete_one({"_id": stallion_in_db["verification_file"]})
 
-    try:
-        db.stallions.delete_one({"_id": stallion_in_db["_id"]})
-    except Exception as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
+                db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "successfully deleted stallion"}
 
@@ -602,7 +596,7 @@ async def update_stallion_profile_status(
                     "profile_status": new_status
                 }
             })
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -622,7 +616,7 @@ async def delete_stallion_from_favorites(
     db = Depends(get_db)
 ):
     if "favorite_stallions" not in current_user or stallion_in_db["_id"] not in current_user["favorite_stallions"]:
-        raise HTTPException(status_code=422, detail="stallion not in favorites")
+        raise HTTPException(status_code=422, detail="stallion not in favorites or no favorite stallions")
 
     try:
         db.users.update_one(
@@ -631,7 +625,7 @@ async def delete_stallion_from_favorites(
                 "favorite_stallions": stallion_in_db["_id"]
             }}
         )
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -654,7 +648,7 @@ async def add_a_favorite_stallion(
                     "favorite_stallions": stallion_in_db["_id"]
                 }}
             )
-        except Exception as exc:
+        except PyMongoError as exc:
             logger.error("failed to write db: %s", traceback.format_exc())
             raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -666,7 +660,7 @@ async def add_a_favorite_stallion(
                     "favorite_stallions": [stallion_in_db["_id"]]
                 }}
             )
-        except Exception as exc:
+        except PyMongoError as exc:
             logger.error("failed to write db: %s", traceback.format_exc())
             raise HTTPException(status_code=500, detail="failed to write db") from exc
 

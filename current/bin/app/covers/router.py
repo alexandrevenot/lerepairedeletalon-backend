@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from pymongo.errors import PyMongoError
 
 import app.covers.utils as utils
 import app.covers.schemas as schemas
@@ -44,10 +45,10 @@ router = APIRouter(prefix='/covers')
 
 @router.post('/cover')
 async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
-    try:
-        seller_id = ObjectId(cover.seller_id)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="seller_id is not readable") from exc
+    if not ObjectId.is_valid(cover.seller_id):
+        raise HTTPException(status_code=422, detail="seller_id is not readable")
+
+    seller_id = ObjectId(cover.seller_id)
 
     # user cant buy a cover to himself
     if seller_id == current_user["_id"]:
@@ -62,7 +63,7 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
         {
             "status": 1
         })
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -84,8 +85,9 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
                 "stallion_std_negative_tests": 1,
                 "stallion_vaccines": 1,
                 "profile_status": 1
-            })
-    except Exception as exc:
+            }
+        )
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -146,10 +148,11 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
 
     try:
         db.covers.insert_one(new_document)
-        return {"message": "cover registered successfully"}
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "cover registered successfully"}
 
 async def step_forward_cover(cover_in_db: dict, next_status: str, db = Depends(get_db)):
     cursor_index = cover_in_db["timestamps"]["cursor_index"]
@@ -169,7 +172,7 @@ async def step_forward_cover(cover_in_db: dict, next_status: str, db = Depends(g
                 }
             }
         db.covers.update_one({"_id": cover_in_db["_id"]}, update)
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
@@ -187,11 +190,10 @@ async def manually_step_forward_cover(query: schemas.ManuallyStepForwardCoverQue
     if not utils.check_status_graph(cover_in_db["status"], query.next_status, pov):
         raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
-    if query.next_status == "approved" and cover_in_db["cover_type"] in stallions_config["onsite_cover_types"]:
-        try:
-            _ = cover_in_db['arrival_date'].strftime("%d/%m/%Y")
-        except Exception as exc:
-            raise HTTPException(status_code=409, detail="an arrival date has to be provided") from exc
+    if query.next_status == "approved" \
+    and cover_in_db["cover_type"] in stallions_config["onsite_cover_types"] \
+    and "arrival_date" not in cover_in_db:
+        raise HTTPException(status_code=409, detail="an arrival date has to be provided")
 
     await step_forward_cover(cover_in_db, query.next_status, db)
 
@@ -211,7 +213,7 @@ async def edit_cover(query: schemas.EditCoverQuery, cover_in_db = Depends(get_co
 
         try:
             arrival_date = datetime.strptime(query.arrival_date, "%d/%m/%Y")
-        except Exception as exc:
+        except ValueError as exc:
             raise HTTPException(status_code=422, detail="incorrect arrival date format") from exc
 
         updated_fields["arrival_date"] = arrival_date
@@ -235,11 +237,11 @@ async def edit_cover(query: schemas.EditCoverQuery, cover_in_db = Depends(get_co
                 "$set":updated_fields
             }
         )
-
-        return {"message": "updated cover successfully"}
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "updated cover successfully"}
 
 @router.get('/cover-group', response_model=schemas.GetCoverGroupRM)
 async def get_cover_group(group: str, point_of_view: str, current_user = Depends(get_current_user), db = Depends(get_db)):
@@ -265,7 +267,7 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
             {
                 "$project": {
                     "timestamps": 1,
-                    "subtotal": 1,
+                    "subtotal_ht": 1,
                     "buyer_fees_ht": 1,
                     "seller_fees_ht": 1,
                     "_id": 1,
@@ -283,7 +285,7 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
                     "most_recent_timestamp": {
                         "$max": "$timestamps.timestamps_list.timestamp"
                     },
-                    "subtotal": {"$first": "$subtotal"},
+                    "subtotal_ht": {"$first": "$subtotal_ht"},
                     "buyer_fees_ht": {"$first": "$buyer_fees_ht"},
                     "seller_fees_ht": {"$first": "$seller_fees_ht"},
                     "stallion_name": {"$first": "$stallion_name"},
@@ -299,7 +301,7 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
         ]
 
         cursor = db.covers.aggregate(pipeline)
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
@@ -307,15 +309,17 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
     for document in cursor:
         if point_of_view == "seller":
             price = pricing_utils.calculate_income(
-                document["subtotal"],
+                document["subtotal_ht"],
                 document["seller_fees_ht"],
-                pricing_config["TVA_coeff_HT"]
+                pricing_config["TVA_coeff_HT"],
+                pricing_config["TVA_cover_coeff_HT"]
                 ).total
         else:
             price = pricing_utils.calculate_checkout(
-                document["subtotal"],
+                document["subtotal_ht"],
                 document["buyer_fees_ht"],
-                pricing_config["TVA_coeff_HT"]
+                pricing_config["TVA_coeff_HT"],
+                pricing_config["TVA_cover_coeff_HT"]
                 ).total
 
         cover_items.append({
@@ -350,15 +354,17 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), current_
     # price
     if pov == "seller":
         price = pricing_utils.calculate_income(
-            cover_in_db["subtotal"],
+            cover_in_db["subtotal_ht"],
             cover_in_db["seller_fees_ht"],
-            pricing_config["TVA_coeff_HT"]
+            pricing_config["TVA_coeff_HT"],
+            pricing_config["TVA_cover_coeff_HT"]
             ).total
     else:
         price = pricing_utils.calculate_checkout(
-            cover_in_db["subtotal"],
+            cover_in_db["subtotal_ht"],
             cover_in_db["buyer_fees_ht"],
-            pricing_config["TVA_coeff_HT"]
+            pricing_config["TVA_coeff_HT"],
+            pricing_config["TVA_cover_coeff_HT"]
             ).total
 
     # timestamps
@@ -391,7 +397,7 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), current_
         arrival_date=str(cover_in_db["arrival_date"].strftime("%d/%m/%Y")) if "arrival_date" in cover_in_db else "",
         status=cover_in_db["status"],
         price=price,
-        base_price=cover_in_db["subtotal"],
+        base_price=cover_in_db["subtotal_ht"],
         buyer_message=cover_in_db["message"],
         timestamps=timestamps_list,
         notes=cover_in_db["notes"][pov],
@@ -418,17 +424,17 @@ async def update_cover_notes(query: schemas.UpdateNotesQuery, cover_in_db = Depe
                 }
             }
         )
-
-        return {"message": "updated notes successfully"}
-    except Exception as exc:
+    except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    return {"message": "updated notes successfully"}
 
 @router.post("/step-forward-payment/{cover_id}")
 async def step_forward_payment(cover_in_db = Depends(get_cover_in_db), db = Depends(get_db)):
     if cover_in_db["status"] == "sellersigned":
-        await step_forward_cover(cover_in_db, "downpaid", db) 
-    elif cover_in_db["status"] == "downpaid": 
+        await step_forward_cover(cover_in_db, "downpaid", db)
+    elif cover_in_db["status"] == "downpaid":
         await step_forward_cover(cover_in_db, "fullypaid", db)
     else:
         raise HTTPException(status_code=403)
