@@ -85,16 +85,16 @@ async def get_stallion_profile(nsire, _ = Depends(verify_admin_password), db = D
         'postal_code',
         'dep_name',
         'reg_name',
-        'profile_status'
+        'profile_status',
+        'thumbnail_photo',
+        'verification_file'
     ]
 
     fields_to_be_serialized = [
         '_id',
         'owner',
         'birthdate',
-        'last_update_timestamp',
-        'thumbnail_photo',
-        'verification_file'
+        'last_update_timestamp'
     ]
 
     for field in fields:

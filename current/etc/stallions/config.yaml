@@ -2,6 +2,17 @@ verification_file_max_size: 10000000 #10Mo
 photo_max_size: 4000000 #4Mo
 photo_low_res_width: 720 #pixels
 
+allowed_verification_file_content_types:
+  - image/jpeg
+  - image/jpg
+  - image/png
+  - image/pdf
+
+allowed_photos_content_types:
+  - image/jpeg
+  - image/jpg
+  - image/png
+
 cover_types:
   - lib
   - hand

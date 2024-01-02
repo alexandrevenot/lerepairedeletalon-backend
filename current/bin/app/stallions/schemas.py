@@ -17,7 +17,7 @@ class MosaicProfileInfo(BaseModel):
     dep_name: str
     reg_name: str
     price: int
-    photo_id: str
+    photo_url: str
 
     @field_validator('cover_types')
     @classmethod
@@ -34,7 +34,7 @@ class DashboardStallionBox(BaseModel):
     id: str
     name: str
     breed: str
-    photo_id: str
+    photo_url: str
     last_update_timestamp: str
     profile_status: str
 

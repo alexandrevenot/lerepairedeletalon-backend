@@ -44,7 +44,7 @@ def calculate_age(birthdate: datetime) -> int:
     age = relativedelta(today, birthdate)
     return age.years
 
-def get_thumbnail_photo_data(data: bytes, content_type: str, wished_new_width: int) -> bytes:
+def get_thumbnail_photo_data(data: bytes, content_type: str, wished_new_width: int):
     image = Image.open(BytesIO(data))
     width, height = image.size
     new_width = min(width, wished_new_width)
@@ -55,4 +55,5 @@ def get_thumbnail_photo_data(data: bytes, content_type: str, wished_new_width: i
     if image_format == "JPG":
         image_format = "JPEG"
     image_thumbnail.save(new_data, format=image_format)
-    return new_data.getvalue()
+    new_data.seek(0)
+    return new_data, image_format.lower()
