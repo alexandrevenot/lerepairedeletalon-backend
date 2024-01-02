@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
-from context import fake_db, get_db, get_db_client
+from context import fake_db, get_db, get_db_client, SMTPDummySession
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
@@ -21,6 +21,7 @@ server.dependency_overrides[users_router.get_db] = get_db
 
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_db_client] = get_db_client
+auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
 
 server.include_router(auth_router.router)
 server.include_router(users_router.router)

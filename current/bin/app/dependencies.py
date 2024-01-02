@@ -6,6 +6,7 @@ import yaml
 from fastapi import HTTPException, Depends, Path, Header
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
+from google.cloud import storage
 
 import app.auth.utils as auth_utils
 
@@ -117,3 +118,24 @@ class StallionInDBGetter:
             raise HTTPException(status_code=404, detail="stallion not found")
 
         return stallion_in_db
+
+class ObjectStorageManager:
+    _instance = None
+
+    def __new__(cls, bucket_name: str):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.client = storage.Client()
+            cls._instance.buckets = {}
+
+        if bucket_name not in cls._instance.buckets.keys():
+            cls._instance.buckets[bucket_name] = cls._instance.client.bucket(bucket_name)
+
+        return cls._instance
+
+class BucketGetter:
+    def __init__(self, bucket_name: str):
+        self.bucket_name = bucket_name
+
+    async def __call__(self):
+        return ObjectStorageManager(self.bucket_name).buckets[self.bucket_name]

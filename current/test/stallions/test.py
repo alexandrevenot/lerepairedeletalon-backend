@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
-from context import fake_db, get_db, get_db_client
+from context import fake_db, get_db, get_db_client, SMTPDummySession
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
 
@@ -27,6 +27,19 @@ server.dependency_overrides[stallions_router.get_db] = get_db
 
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[stallions_router.get_db_client] = get_db_client
+
+fake_blob = unittest.mock.Mock()
+with open('/lerepairedeletalon/server/current/test/stallions/sellefrançais.jpg', 'rb') as file:
+    fake_blob.download_as_string.return_value = file.read()
+fake_blob.content_type = 'image/jpg'
+
+stallion_photos_bucket_mock = unittest.mock.Mock()
+stallion_photos_bucket_mock.blob.return_value = fake_blob
+
+server.dependency_overrides[stallions_router.get_stalllion_photos_bucket] = lambda: stallion_photos_bucket_mock
+server.dependency_overrides[stallions_router.get_admin_files_bucket] = lambda: unittest.mock.Mock()
+auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
+
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
@@ -137,7 +150,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(str(response.json()["content"][0]["name"]), "Michel du Rouet")
         self.assertEqual(str(response.json()["content"][0]["breed"]), "Selle Français")
         stallion_in_db = fake_db.stallions.find_one({"_id": ObjectId(stallion_id)})
-        self.assertEqual(str(response.json()["content"][0]["photo_id"]), str(stallion_in_db["thumbnail_photo"]))
+        self.assertEqual(str(response.json()["content"][0]["photo_url"]), stallion_in_db["thumbnail_photo"])
         self.assertEqual(response.json()["content"][0]["profile_status"], "to_be_validated")
         self.assertEqual(len(response.json()["content"][0].keys()), 6)
 
@@ -237,15 +250,12 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         files = (
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
+            ("kept_photos", (None, "1")),
+            ("new_photos", ("photo.jpg", self.ph, "image/jpg"))
         )
 
         response = client.put(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
         self.assertEqual(response.status_code, 200)
-
-        nb_of_photos_in_db = len([_ for _ in fake_db.stallion_photos.find()])
-        self.assertEqual(nb_of_photos_in_db, 3)
 
         response = client.get(f'/stallions/stallion/{stallion_id}?mode=profile', headers=headers)
         self.assertEqual(response.status_code, 200)
@@ -289,8 +299,6 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         self.assertEqual(0, len([_ for _ in fake_db.stallions.find()]))
-        self.assertEqual(0, len([_ for _ in fake_db.stallion_photos.find()]))
-        self.assertEqual(0, len([_ for _ in fake_db.verification_files.find()]))
 
         # test invalid bodies for post stallion
 

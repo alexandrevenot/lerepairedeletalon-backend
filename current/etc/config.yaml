@@ -10,8 +10,14 @@ frontend_url: "http://localhost:4200"
 
 # esignatures
 esignatures_url: "https://esignatures.io"
+mode: demo # prod or demo, not bound to value yet
 
 # db
 db_to_use: test
 mongo_url: "mongodb://localhost:27017/"
 send_demo_contracts: true
+
+# obj storage
+gc_storage_prefix: https://storage.googleapis.com/
+stallion_photos_bucket_name: lrde-public-photos
+admin_files_bucket_name: lrde-admin-files

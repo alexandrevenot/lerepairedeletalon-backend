@@ -1,4 +1,5 @@
 import mongomock
+import unittest
 
 fake_client = mongomock.MongoClient()
 fake_db = fake_client.main
@@ -21,3 +22,13 @@ dummy_client = DummyClient()
 
 get_db = lambda: fake_db
 get_db_client = lambda: dummy_client
+
+class SMTPDummySession:
+    def __init__(self, osef, osef2):
+        pass
+
+    def __enter__(self):
+        return unittest.mock.Mock()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass

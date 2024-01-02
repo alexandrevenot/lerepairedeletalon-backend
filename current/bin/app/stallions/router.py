@@ -1,12 +1,11 @@
+import uuid
 import logging
 import logging.handlers
 import traceback
-from bson.objectid import ObjectId
 from typing import Annotated
 from datetime import datetime
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Path
-from fastapi.responses import Response
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from pymongo.errors import PyMongoError
 
 import app.stallions.utils as utils
@@ -14,7 +13,7 @@ import app.stallions.schemas as schemas
 import app.geoloc.utils as geoloc_utils
 import app.pricing.utils as pricing_utils
 
-from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client
+from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client, BucketGetter
 
 # configs
 global_config = utils.load_global_config()
@@ -38,6 +37,8 @@ logger.info('Logger initialized')
 # dependencies
 get_current_user = CurrentUserGetter(logger)
 get_stallion_in_db = StallionInDBGetter(logger)
+get_stalllion_photos_bucket = BucketGetter(global_config['stallion_photos_bucket_name'])
+get_admin_files_bucket = BucketGetter(global_config['admin_files_bucket_name'])
 
 # routes
 router = APIRouter(prefix='/stallions')
@@ -161,25 +162,9 @@ async def search(
             reg_name=document["reg_name"],
             price=utils.get_displayed_price(document, min_price, max_price, config["cover_types"]) if cover_types is None \
                 else utils.get_displayed_price(document, min_price, max_price, cover_types),
-            photo_id=str(document["thumbnail_photo"])
+            photo_url=document["thumbnail_photo"]
         ))
     return schemas.SearchRM(content=mp_l)
-
-@router.get('/stallion-photo/{photo_id}')
-async def get_stallion_photo(photo_id, db = Depends(get_db)):
-    try:
-        photo = db.stallion_photos.find_one({"_id": ObjectId(photo_id)})
-    except PyMongoError as exc:
-        logger.error("failed to read db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail='failed to read db') from exc
-
-    if photo is None:
-        raise HTTPException(status_code=404, detail="image not found")
-
-    image_data = photo["data"]
-    image_content_type = photo["content_type"]
-
-    return Response(content=image_data, media_type=image_content_type)
 
 @router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformationForFavorite | schemas.StallionProfileInformation | schemas.StallionProfileInformationForEdition)
 async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user)):
@@ -196,7 +181,7 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
         return schemas.StallionProfileInformationForFavorite(
             name=stallion_in_db["name"],
             breed=stallion_in_db["breed"],
-            thumbnail_photo=str(stallion_in_db["thumbnail_photo"]),
+            thumbnail_photo=stallion_in_db["thumbnail_photo"],
             profile_status=stallion_in_db["profile_status"]
         )
 
@@ -219,7 +204,8 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
         'city',
         'stallion_std_negative_tests',
         'stallion_vaccines',
-        'crossbreeding_advice'
+        'crossbreeding_advice',
+        'photos'
     ]
 
     if mode == 'profile':
@@ -240,10 +226,7 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
     for field in fields:
         kwargs[field] = stallion_in_db[field]
 
-    return {
-        "photos": [str(oid) for oid in stallion_in_db["photos"]],
-        **kwargs
-    }
+    return kwargs
 
 @router.get('/my-stallions', response_model=schemas.GetMyStallionsRM)
 async def get_my_stallions(current_user = Depends(get_current_user), db = Depends(get_db)):
@@ -261,7 +244,7 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
             id=str(document["_id"]),
             name=document["name"],
             breed=document["breed"],
-            photo_id=str(document["thumbnail_photo"]),
+            photo_url=document["thumbnail_photo"],
             profile_status=document["profile_status"],
             last_update_timestamp=document["last_update_timestamp"].strftime("le %d/%m/%Y à %H:%M")
         ))
@@ -351,7 +334,10 @@ async def register_new_stallion_files(
     photos: Annotated[list[UploadFile], File()],
     stallion_in_db = Depends(get_stallion_in_db),
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db = Depends(get_db),
+    stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
+    admin_files_bucket = Depends(get_admin_files_bucket),
+    db_client = Depends(get_db_client)
 ):
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can post stallion files")
@@ -362,56 +348,72 @@ async def register_new_stallion_files(
     if not 1 <= len(photos) <= 5:
         raise HTTPException(status_code=422, detail="there must be between 1 and 5 photos")
 
+    if verification_file.content_type not in config['allowed_verification_file_content_types']:
+        raise HTTPException(status_code=422, detail="verification file type not allowed")
+
     if verification_file.size > config['verification_file_max_size']:
         raise HTTPException(status_code=422, detail="verification_file is too large")
 
-    verification_file_obj = {}
-    verification_file_obj["content_type"] = verification_file.content_type
-    verification_file_obj["data"] = await verification_file.read()
-
     for photo_f in photos:
+        if photo_f.content_type not in config['allowed_photos_content_types']:
+            raise HTTPException(status_code=422, detail="a photo content type is not allowed")
         if photo_f.size > config['photo_max_size']:
-            raise HTTPException(status_code=422, detail="one of the photos is too large")
+            raise HTTPException(status_code=422, detail="a photo is too large")
 
-    photo_obj_list = []
     data = await photos[0].read()
     content_type = photos[0].content_type
-    photo_obj_list.append({
-        "content_type": content_type,
-        "data": data
-    })
 
     try:
-        thumbnail_photo = {
-            "content_type": content_type,
-            "data": utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
-        }
+        thumbnail_photo, tp_content_type = utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
     except Exception as exc:
         logger.error("failed to process photos: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to process photos") from exc
 
-    for photo_f in photos[1:]:
-        p = {
-            "content_type": photo_f.content_type,
-            "data": await photo_f.read()
-        }
-        photo_obj_list.append(p)
+    vf_blob_name = str(uuid.uuid4()) + '.' + verification_file.content_type.split('/')[1]
+    vf_blob = admin_files_bucket.blob(vf_blob_name)
+    vf_blob.content_type = verification_file.content_type
 
-    try:
-        db.stallions.update_one({
-            "_id": stallion_in_db["_id"]
-        },
-        {
-            "$set": {
-                "verification_file": db.verification_files.insert_one(verification_file_obj).inserted_id,
-                "thumbnail_photo": db.stallion_photos.insert_one(thumbnail_photo).inserted_id,
-                "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
-                "last_update_timestamp": datetime.now()
-            }
-        })
-    except PyMongoError as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
+    tp_blob_name = str(uuid.uuid4()) + '.' + tp_content_type
+    tp_blob = stallion_photos_bucket.blob(tp_blob_name)
+    tp_blob.content_type = 'image/' + tp_content_type
+
+    photos_blob_names = []
+    photo_blobs = []
+    for photo_f in photos:
+        blob_name = str(uuid.uuid4()) + '.' + photo_f.content_type.split('/')[1]
+        photos_blob_names.append(blob_name)
+        blob = stallion_photos_bucket.blob(blob_name)
+        blob.content_type = photo_f.content_type
+        photo_blobs.append(blob)
+
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.stallions.update_one({
+                    "_id": stallion_in_db["_id"]
+                },
+                {
+                    "$set": {
+                        "verification_file": vf_blob_name,
+                        "thumbnail_photo": tp_blob_name,
+                        "photos": photos_blob_names,
+                        "last_update_timestamp": datetime.now()
+                    }
+                })
+
+                vf_blob.upload_from_file(verification_file.file, rewind=True)
+                tp_blob.upload_from_file(thumbnail_photo, rewind=True)
+
+                for photo_blob, photo_f in zip(photo_blobs, photos):
+                    photo_blob.upload_from_file(photo_f.file, rewind=True)
+
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+            except Exception as exc:
+                logger.error("failed to write object storage: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully added stallion files"}
 
@@ -477,65 +479,132 @@ async def edit_stallion_profile(
 
 @router.put('/stallion-files/{stallion_id}')
 async def update_stallion_photos(
-    photos: Annotated[list[UploadFile], File()],
+    kept_photos: list[int] = None, # photos indexes to keep, ex: [0, 2, 3]
+    new_photos: Annotated[list[UploadFile], File()] = None,
     stallion_in_db = Depends(get_stallion_in_db),
     current_user = Depends(get_current_user),
     db = Depends(get_db),
-    db_client = Depends(get_db_client)
+    db_client = Depends(get_db_client),
+    stallion_photos_bucket = Depends(get_stalllion_photos_bucket)
 ):
+    if kept_photos is None:
+        kept_photos = []
+    if new_photos is None:
+        new_photos = []
+
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can update stallion photos")
 
-    for photo_f in photos:
+    if "photos" not in stallion_in_db or "thumbnail_photo" not in stallion_in_db:
+        raise HTTPException(status_code=403, detail="cannot put stallion files yet")
+
+    if kept_photos != sorted(kept_photos) \
+    or kept_photos != list(set(kept_photos)) \
+    or any(index >= len(stallion_in_db["photos"]) or index < 0 for index in kept_photos):
+        raise HTTPException(status_code=422, detail="invalid kept_photos")
+
+    if not 1 <= len(new_photos) + len(kept_photos) <= 5:
+        raise HTTPException(status_code=422, detail="there must remain between 1 and 5 photos")
+
+    for photo_f in new_photos:
+        if photo_f.content_type not in config['allowed_photos_content_types']:
+            raise HTTPException(status_code=422, detail="a photo content type is not allowed")
         if photo_f.size > config['photo_max_size']:
             raise HTTPException(status_code=422, detail="one of the photos is too large")
 
-    photo_obj_list = []
-    data = await photos[0].read()
-    content_type = photos[0].content_type
-    photo_obj_list.append({
-        "content_type": content_type,
-        "data": data
-    })
+    # thumbnail
+    if 0 not in kept_photos:
+        # then the thumbnail photo will change
+        if len(kept_photos) == 0:
+            data = await new_photos[0].read()
+            content_type = new_photos[0].content_type
+        else:
+            index_of_new_thumbnail_photo = kept_photos[0]
+            new_thumbnail_photo_blob = stallion_photos_bucket.blob(stallion_in_db["photos"][index_of_new_thumbnail_photo])
+            data = new_thumbnail_photo_blob.download_as_string()
+            content_type = new_thumbnail_photo_blob.content_type
 
-    try:
-        thumbnail_photo = {
-            "content_type": content_type,
-            "data": utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
-        }
-    except Exception as exc:
-        logger.error("failed to process photos: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to process photos") from exc
+        try:
+            new_thumbnail_photo, new_tp_content_type = utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
+        except KeyError as exc:
+            if str(exc) == "'OCTET-STREAM'":
+                raise HTTPException(status_code=422, detail="issue on image format") from exc
+            raise
+        except Exception as exc:
+            logger.error("failed to process photos: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to process photos") from exc
 
-    for photo_f in photos[1:]:
-        p = {
-            "content_type": photo_f.content_type,
-            "data": await photo_f.read()
-        }
-        photo_obj_list.append(p)
+        new_tp_blob_name = str(uuid.uuid4()) + '.' + new_tp_content_type
+        new_tp_blob = stallion_photos_bucket.blob(new_tp_blob_name)
+        new_tp_blob.content_type = 'image/' + new_tp_content_type
+        should_update_thumbnail = True
+    else:
+        should_update_thumbnail = False
+
+    # kept and removed photos blob names
+    kept_photos_blob_names = []
+    removed_photos_blob_names = []
+    for index in range(len(stallion_in_db["photos"])):
+        if index in kept_photos:
+            kept_photos_blob_names.append(stallion_in_db["photos"][index])
+        else:
+            removed_photos_blob_names.append(stallion_in_db["photos"][index])
+
+    # new photos
+    new_photos_blob_names = []
+    new_photos_blobs = []
+    for photo_f in new_photos:
+        blob_name = str(uuid.uuid4()) + '.' + photo_f.content_type.split('/')[1]
+        new_photos_blob_names.append(blob_name)
+        blob = stallion_photos_bucket.blob(blob_name)
+        blob.content_type = photo_f.content_type
+        new_photos_blobs.append(blob)
 
     with db_client.start_session() as session:
         with session.start_transaction():
             try:
-                db.stallion_photos.delete_many({
-                    "_id": {
-                        "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
-                    }
-                })
+                kwargs = {}
+
+                if should_update_thumbnail:
+                    kwargs["thumbnail_photo"] = new_tp_blob_name
+
+                kwargs["photos"] = kept_photos_blob_names + new_photos_blob_names
+
 
                 db.stallions.update_one({
                     "_id": stallion_in_db["_id"]
                 },
                 {
                     "$set": {
-                        "thumbnail_photo": db.stallion_photos.insert_one(thumbnail_photo).inserted_id,
-                        "photos": [db.stallion_photos.insert_one(photo).inserted_id for photo in photo_obj_list],
+                        **kwargs,
                         "last_update_timestamp": datetime.now()
                     }
                 })
+
+                # delete previous files from object storage
+                if should_update_thumbnail:
+                    old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
+                    # thumbnail blob name is still the old one in stallion_in_db dictionnary variable value
+                removed_photos_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in removed_photos_blob_names]
+
+                if should_update_thumbnail:
+                    old_tp_blob.delete()
+                for blob in removed_photos_blobs:
+                    blob.delete()
+
+                # upload new photos
+                if should_update_thumbnail:
+                    new_tp_blob.upload_from_file(new_thumbnail_photo, rewind=True)
+                for photo_blob, photo_f in zip(new_photos_blobs, new_photos):
+                    photo_blob.upload_from_file(photo_f.file, rewind=True)
+
             except PyMongoError as exc:
                 logger.error("failed to write db: %s", traceback.format_exc())
                 raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+            except Exception as exc:
+                logger.error("failed to write object storage: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully updated stallion photos"}
 
@@ -544,7 +613,9 @@ async def delete_stallion(
     stallion_in_db = Depends(get_stallion_in_db),
     current_user = Depends(get_current_user),
     db = Depends(get_db),
-    db_client = Depends(get_db_client)
+    db_client = Depends(get_db_client),
+    stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
+    admin_files_bucket = Depends(get_admin_files_bucket)
     ):
     if current_user["_id"] != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can delete stallion")
@@ -552,20 +623,27 @@ async def delete_stallion(
     with db_client.start_session() as session:
         with session.start_transaction():
             try:
+                db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+
                 if "photos" in stallion_in_db:
-                    db.stallion_photos.delete_many({
-                        "_id": {
-                            "$in": stallion_in_db["photos"] + [stallion_in_db["thumbnail_photo"]]
-                        }
-                    })
+                    old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
+                    old_photo_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in stallion_in_db["photos"]]
+
+                    old_tp_blob.delete()
+                    for blob in old_photo_blobs:
+                        blob.delete()
 
                 if "verification_file" in stallion_in_db:
-                    db.verification_files.delete_one({"_id": stallion_in_db["verification_file"]})
+                    vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
+                    vf_blob.delete()
 
-                db.stallions.delete_one({"_id": stallion_in_db["_id"]})
             except PyMongoError as exc:
                 logger.error("failed to write db: %s", traceback.format_exc())
                 raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+            except Exception as exc:
+                logger.error("failed to write object storage: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully deleted stallion"}
 
