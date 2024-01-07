@@ -20,6 +20,15 @@ class ContractualIdentity(BaseModel):
     head_office_address: str = None
     siret: str = None
 
+class BankIdentity(BaseModel):
+    bank_identity_file_status: str
+    bank_identity_file: str
+    bank_domiciliation_country: str = ""
+    account_holder: str = ""
+    bank: str = ""
+    iban: str = ""
+    bic_or_swift: str = ""
+
 class GetAccountInformation(BaseModel):
     user_id: str
     firstname: str
@@ -27,6 +36,7 @@ class GetAccountInformation(BaseModel):
     email: str
     phone_number: str
     contractual_identity: ContractualIdentity = None
+    bank_identity: BankIdentity = None
 
 class PutContractualIdentityQuery(BaseModel):
     type: str

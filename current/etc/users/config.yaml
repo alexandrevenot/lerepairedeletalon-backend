@@ -1,0 +1,5 @@
+allowed_bank_identity_file_content_types:
+  - image/jpeg
+  - image/jpg
+  - image/png
+  - image/pdf

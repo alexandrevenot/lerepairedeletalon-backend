@@ -1,4 +1,4 @@
 from pydantic import BaseModel
 
-class StallionsToBeValidated(BaseModel):
-    nsire_list: list[str]
+class IdList(BaseModel):
+    id_list: list[str]
