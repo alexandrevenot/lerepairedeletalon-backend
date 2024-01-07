@@ -22,6 +22,7 @@ server.dependency_overrides[users_router.get_db] = get_db
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_db_client] = get_db_client
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
+server.dependency_overrides[users_router.get_admin_files_bucket] = lambda: unittest.mock.Mock()
 
 server.include_router(auth_router.router)
 server.include_router(users_router.router)
@@ -202,6 +203,35 @@ class UsersTest(unittest.TestCase):
 
         for key, value in working_json.items():
             self.assertEqual(value, user_in_db["contractual_identity"][key])
+
+        self.vf = open('/lerepairedeletalon/server/current/test/stallions/verification_file.png', 'rb')
+
+        files = (
+            ("bank_identity_file", ("bank_identity_file.png", self.vf, "image/png")),
+        )
+
+        response = client.put('/users/bank-identity', headers={"Authorization": f"Bearer {access_token}"}, files=files)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.get('/users/account-information', headers={"Authorization": f"Bearer {access_token}"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["bank_identity"]["bank_identity_file"][-4:], ".png")
+        first_uuid = response.json()["bank_identity"]["bank_identity_file"][:-4]
+        self.assertEqual(response.json()["bank_identity"]["bank_identity_file_status"], "to_be_validated")
+
+        # change the bank identity file while its being validated
+        response = client.put('/users/bank-identity', headers={"Authorization": f"Bearer {access_token}"}, files=files)
+        self.assertEqual(response.status_code, 200)
+
+        response = client.get('/users/account-information', headers={"Authorization": f"Bearer {access_token}"})
+        self.assertEqual(response.status_code, 200)
+        second_uuid = response.json()["bank_identity"]["bank_identity_file"][:-4]
+
+        # check that the uuid changed, bcs the old file was deleted and the new one uploaded
+        self.assertNotEqual(first_uuid, second_uuid)
+
+    def tearDown(self):
+        self.vf.close()
 
 if __name__ == '__main__':
     os.chdir('../bin')

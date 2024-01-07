@@ -3,15 +3,17 @@ import logging.handlers
 import traceback
 import math
 from datetime import datetime
+from typing import Annotated
+import uuid
 from bson.objectid import ObjectId
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pymongo.errors import PyMongoError
 
 import app.users.utils as utils
 import app.users.schemas as schemas
 
-from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client
+from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
 
 # configs
 global_config = utils.load_global_config()
@@ -35,6 +37,7 @@ logger.info('Logger initialized')
 get_user_in_db = UserInDBGetter(logger)
 get_current_user = CurrentUserGetter(logger)
 get_cover_in_db = CoverInDBGetter(logger)
+get_admin_files_bucket = BucketGetter(global_config['admin_files_bucket_name'])
 
 # routes
 router = APIRouter(prefix='/users')
@@ -49,32 +52,9 @@ async def get_user(current_user = Depends(get_current_user)):
 @router.get('/account-information', response_model=schemas.GetAccountInformation)
 async def get_account_information(current_user = Depends(get_current_user)):
     try:
-        contractual_identity = schemas.ContractualIdentity(
-            type=current_user['contractual_identity']['type'],
-            company_name=current_user['contractual_identity']['company_name'],
-            company_status=current_user['contractual_identity']['company_status'],
-            capital=current_user['contractual_identity']['capital'],
-            head_office_address=current_user['contractual_identity']['head_office_address'],
-            siret=current_user['contractual_identity']['siret'],
-            postal_address=current_user['contractual_identity']['postal_address'],
-            birthdate=current_user['contractual_identity']['birthdate'],
-            birthplace=current_user['contractual_identity']['birthplace'],
-            citizenship=current_user['contractual_identity']['citizenship'],
-            gender=current_user['contractual_identity']['gender']
-        )
-
+        contractual_identity = schemas.ContractualIdentity(**current_user['contractual_identity'])
     except KeyError:
-        try:
-            contractual_identity = schemas.ContractualIdentity(
-                type=current_user['contractual_identity']['type'],
-                postal_address=current_user['contractual_identity']['postal_address'],
-                birthdate=current_user['contractual_identity']['birthdate'],
-                birthplace=current_user['contractual_identity']['birthplace'],
-                citizenship=current_user['contractual_identity']['citizenship'],
-                gender=current_user['contractual_identity']['gender']
-            )
-        except KeyError:
-            contractual_identity = None
+        contractual_identity = None
 
     kwargs = {}
     for field in ["firstname", "lastname", "email", "phone_number"]:
@@ -82,10 +62,18 @@ async def get_account_information(current_user = Depends(get_current_user)):
 
     kwargs["user_id"] = str(current_user["_id"])
 
-    if contractual_identity is None:
-        return schemas.GetAccountInformation(**kwargs)
+    try:
+        bank_identity = schemas.BankIdentity(**current_user['bank_identity'])
+    except KeyError:
+        bank_identity = None
 
-    return schemas.GetAccountInformation(contractual_identity=contractual_identity, **kwargs)
+    if contractual_identity is not None:
+        kwargs["contractual_identity"] = contractual_identity
+
+    if bank_identity is not None:
+        kwargs["bank_identity"] = bank_identity
+
+    return schemas.GetAccountInformation(**kwargs)
 
 @router.put('/contractual-identity')
 async def put_contractual_identity(query: schemas.PutContractualIdentityQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
@@ -365,3 +353,54 @@ async def get_user_score(
         score=score,
         nb_reviews=nb_reviews
     )
+
+@router.put('/bank-identity')
+async def put_bank_identity(
+    bank_identity_file: Annotated[UploadFile, File()],
+    current_user = Depends(get_current_user),
+    db = Depends(get_db),
+    admin_files_bucket = Depends(get_admin_files_bucket),
+    db_client = Depends(get_db_client)
+):
+    try:
+        bank_identity_file_status = current_user['bank_identity']['bank_identity_file_status']
+    except KeyError:
+        bank_identity_file_status = None
+
+    if bank_identity_file.content_type not in config['allowed_bank_identity_file_content_types']:
+        raise HTTPException(status_code=422, detail="file type not allowed")
+
+    bank_identity_file_blob_name = str(uuid.uuid4()) + '.' + bank_identity_file.content_type.split('/')[1]
+    bank_identity_file_blob = admin_files_bucket.blob(bank_identity_file_blob_name)
+    bank_identity_file_blob.content_type = bank_identity_file.content_type
+
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.users.update_one(
+                    {"_id": current_user["_id"]},
+                    {
+                        "$set": {
+                            "bank_identity.bank_identity_file": bank_identity_file_blob_name,
+                            "bank_identity.bank_identity_file_status": "to_be_validated"
+                        }
+                    }
+                )
+
+                if bank_identity_file_status is not None:
+                    old_bank_identity_file_blob = admin_files_bucket.blob(current_user['bank_identity']["bank_identity_file"])
+
+                bank_identity_file_blob.upload_from_file(bank_identity_file.file, rewind=True)
+
+                if bank_identity_file_status is not None:
+                    old_bank_identity_file_blob.delete()
+
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+            except Exception as exc:
+                logger.error("failed to write object storage: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+
+    return {"message": "successfully added bank_identity_file"}
