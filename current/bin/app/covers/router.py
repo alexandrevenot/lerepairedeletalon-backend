@@ -4,7 +4,7 @@ import traceback
 from bson.objectid import ObjectId
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pymongo.errors import PyMongoError
 
 import app.covers.utils as utils
@@ -12,8 +12,9 @@ import app.covers.schemas as schemas
 import app.pricing.utils as pricing_utils
 import app.contracts.utils as contracts_utils
 import app.stallions.utils as stallions_utils
+import app.users.utils as users_utils
 
-from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter
+from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
 
 # configs
 global_config = utils.load_global_config()
@@ -44,7 +45,12 @@ get_cover_in_db = CoverInDBGetter(logger)
 router = APIRouter(prefix='/covers')
 
 @router.post('/cover')
-async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
+async def create_cover(
+    cover: schemas.CoverQuery,
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
     if not ObjectId.is_valid(cover.seller_id):
         raise HTTPException(status_code=422, detail="seller_id is not readable")
 
@@ -53,6 +59,16 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
     # user cant buy a cover to himself
     if seller_id == current_user["_id"]:
         raise HTTPException(status_code=400, detail="seller_id is equal to buyer_id")
+
+    # check that seller exists
+    try:
+        seller_in_db = db.users.find_one({"_id": seller_id})
+    except PyMongoError as exc:
+        logger.error("failed to read db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read db") from exc
+
+    if seller_in_db is None:
+        raise HTTPException(status_code=404, detail="seller not found")
 
     # check that all existing covers with this stallion/mare couple are over
     try:
@@ -147,10 +163,12 @@ async def create_cover(cover: schemas.CoverQuery, current_user = Depends(get_cur
     })
 
     try:
-        db.covers.insert_one(new_document)
+        result = db.covers.insert_one(new_document)
     except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    background_tasks.add_task(users_utils.notify_user, 'requested', result.inserted_id, 'seller', seller_in_db, current_user, db, logger)
 
     return {"message": "cover registered successfully"}
 
@@ -176,10 +194,14 @@ async def step_forward_cover(cover_in_db: dict, next_status: str, db = Depends(g
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-    return {"message": "successfully step-forwarded cover"}
-
 @router.post('/step-forward-cover/{cover_id}')
-async def manually_step_forward_cover(query: schemas.ManuallyStepForwardCoverQuery, cover_in_db = Depends(get_cover_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
+async def manually_step_forward_cover(
+    query: schemas.ManuallyStepForwardCoverQuery,
+    background_tasks: BackgroundTasks,
+    cover_in_db = Depends(get_cover_in_db),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
     if current_user["_id"] == cover_in_db["buyer_id"]:
         pov = "buyer"
     elif current_user["_id"] == cover_in_db["seller_id"]:
@@ -197,9 +219,28 @@ async def manually_step_forward_cover(query: schemas.ManuallyStepForwardCoverQue
 
     await step_forward_cover(cover_in_db, query.next_status, db)
 
+    destination_pov = "seller" if pov == "buyer" else "buyer"
+    background_tasks.add_task(
+        users_utils.notify_user,
+        query.next_status,
+        cover_in_db["_id"],
+        destination_pov,
+        await get_user_from_object_id(cover_in_db[f"{destination_pov}_id"], db, logger),
+        current_user,
+        db,
+        logger
+    )
+
+    return {"message": "successfully step-forwarded cover"}
+
 @router.put('/cover/{cover_id}')
-async def edit_cover(query: schemas.EditCoverQuery, cover_in_db = Depends(get_cover_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
-    if current_user["_id"] != cover_in_db["seller_id"]:
+async def edit_cover(
+    query: schemas.EditCoverQuery,
+    cover_in_db = Depends(get_cover_in_db),
+    user_id = Depends(get_current_user_id),
+    db = Depends(get_db)
+):
+    if user_id != cover_in_db["seller_id"]:
         raise HTTPException(status_code=403, detail="only seller can edit cover")
 
     if cover_in_db["status"] != "requested":
@@ -244,7 +285,7 @@ async def edit_cover(query: schemas.EditCoverQuery, cover_in_db = Depends(get_co
     return {"message": "updated cover successfully"}
 
 @router.get('/cover-group', response_model=schemas.GetCoverGroupRM)
-async def get_cover_group(group: str, point_of_view: str, current_user = Depends(get_current_user), db = Depends(get_db)):
+async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_current_user_id), db = Depends(get_db)):
     # data validation
     if group not in config["groups"].keys():
         raise HTTPException(status_code=422, detail="invalid group")
@@ -256,7 +297,7 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
     status_l = config["groups"][group]
     pattern = {
         'status': {'$in': status_l},
-        point_of_view + '_id': current_user["_id"]
+        point_of_view + '_id': user_id
     }
 
     try:
@@ -333,10 +374,10 @@ async def get_cover_group(group: str, point_of_view: str, current_user = Depends
     return schemas.GetCoverGroupRM(items=cover_items)
 
 @router.get('/cover/{cover_id}', response_model=schemas.GetCoverInformation)
-async def get_cover_information(cover_in_db = Depends(get_cover_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
-    if current_user['_id'] == cover_in_db["seller_id"]:
+async def get_cover_information(cover_in_db = Depends(get_cover_in_db), user_id = Depends(get_current_user_id), db = Depends(get_db)):
+    if user_id == cover_in_db["seller_id"]:
         pov = "seller"
-    elif current_user['_id'] == cover_in_db["buyer_id"]:
+    elif user_id == cover_in_db["buyer_id"]:
         pov = "buyer"
     else:
         raise HTTPException(status_code=403, detail="only seller and buyer can get cover information")
@@ -393,7 +434,6 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), current_
         contact_email=contact_email,
         cover_type=cover_in_db["cover_type"],
         cover_specs=cover_in_db["cover_specs"],
-        provided_cover_place=cover_in_db["provided_cover_place"],
         arrival_date=str(cover_in_db["arrival_date"].strftime("%d/%m/%Y")) if "arrival_date" in cover_in_db else "",
         status=cover_in_db["status"],
         price=price,
@@ -407,10 +447,10 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), current_
     )
 
 @router.put('/cover-notes/{cover_id}')
-async def update_cover_notes(query: schemas.UpdateNotesQuery, cover_in_db = Depends(get_cover_in_db), current_user = Depends(get_current_user), db = Depends(get_db)):
-    if current_user['_id'] == cover_in_db["seller_id"]:
+async def update_cover_notes(query: schemas.UpdateNotesQuery, cover_in_db = Depends(get_cover_in_db), user_id = Depends(get_current_user_id), db = Depends(get_db)):
+    if user_id == cover_in_db["seller_id"]:
         pov = "seller"
-    elif current_user['_id'] == cover_in_db["buyer_id"]:
+    elif user_id == cover_in_db["buyer_id"]:
         pov = "buyer"
     else:
         raise HTTPException(status_code=403, detail="only seller and buyer can edit notes")

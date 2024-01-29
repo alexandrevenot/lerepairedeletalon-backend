@@ -90,17 +90,18 @@ class StallionsTest(unittest.TestCase):
                 "Selle Français"
             ],
             "cover_specs": {
-                "iai": {
+                "hand": {
                     "price": 750,
                     "balance_payment_condition": "living_foal_48",
                     "advance_percentage": 50,
                     "cover_place": "ici",
                     "maximum_nb_of_attempts": 3,
-                    "hosting_specs": {
-                        "meadow": {
-                            "price": 6
+                    "demanded_std_negative_tests": {
+                        "arterite": {
+                            "test_oldness": 28
                         }
-                    }
+                    },
+                    "demanded_vaccines": ["tetanos"]
                 }
             },
             "pedigree": [
@@ -173,12 +174,13 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(content["dep_name"], "Haute-Garonne")
         self.assertEqual(content["reg_name"], "Occitanie")
         self.assertEqual(content["production_breeds"], ["Selle Français"])
-        self.assertEqual(content["cover_specs"]["iai"]["price"], 750)
-        self.assertEqual(content["cover_specs"]["iai"]["balance_payment_condition"], "living_foal_48")
-        self.assertEqual(content["cover_specs"]["iai"]["advance_percentage"], 50)
-        self.assertEqual(content["cover_specs"]["iai"]["cover_place"], "ici")
-        self.assertEqual(content["cover_specs"]["iai"]["maximum_nb_of_attempts"], 3)
-        self.assertEqual(content["cover_specs"]["iai"]["hosting_specs"]["meadow"]["price"], 6)
+        self.assertEqual(content["cover_specs"]["hand"]["price"], 750)
+        self.assertEqual(content["cover_specs"]["hand"]["balance_payment_condition"], "living_foal_48")
+        self.assertEqual(content["cover_specs"]["hand"]["advance_percentage"], 50)
+        self.assertEqual(content["cover_specs"]["hand"]["cover_place"], "ici")
+        self.assertEqual(content["cover_specs"]["hand"]["maximum_nb_of_attempts"], 3)
+        self.assertEqual(content["cover_specs"]["hand"]["demanded_std_negative_tests"]["arterite"]["test_oldness"], 28)
+        self.assertEqual(content["cover_specs"]["hand"]["demanded_vaccines"], ["tetanos"])
         self.assertEqual(content["pedigree"], ['Popa'] + ['']*13)
         self.assertEqual(content["pedigree_po"], "pedigree po")
         self.assertEqual(content["cover_additional_info"], "cover additional info")
@@ -206,17 +208,18 @@ class StallionsTest(unittest.TestCase):
                 "Boulonnais"
             ],
             "cover_specs": {
-                "iai": {
+                "hand": {
                     "price": 780,
                     "balance_payment_condition": "living_foal",
                     "advance_percentage": 40,
                     "cover_place": "là",
                     "maximum_nb_of_attempts": 4,
-                    "hosting_specs": {
-                        "meadow": {
-                            "price": 7
+                    "demanded_std_negative_tests": {
+                        "arterite": {
+                            "test_oldness": 27
                         }
-                    }
+                    },
+                    "demanded_vaccines": ["grippe"]
                 }
             },
             "pedigree": [
@@ -274,12 +277,12 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(content["dep_name"], "Aveyron")
         self.assertEqual(content["reg_name"], "Occitanie")
         self.assertEqual(content["production_breeds"], ["Selle Français", "Boulonnais"])
-        self.assertEqual(content["cover_specs"]["iai"]["price"], 780)
-        self.assertEqual(content["cover_specs"]["iai"]["balance_payment_condition"], "living_foal")
-        self.assertEqual(content["cover_specs"]["iai"]["advance_percentage"], 40)
-        self.assertEqual(content["cover_specs"]["iai"]["maximum_nb_of_attempts"], 4)
-        self.assertEqual(content["cover_specs"]["iai"]["cover_place"], "là")
-        self.assertEqual(content["cover_specs"]["iai"]["hosting_specs"]["meadow"]["price"], 7)
+        self.assertEqual(content["cover_specs"]["hand"]["price"], 780)
+        self.assertEqual(content["cover_specs"]["hand"]["balance_payment_condition"], "living_foal")
+        self.assertEqual(content["cover_specs"]["hand"]["advance_percentage"], 40)
+        self.assertEqual(content["cover_specs"]["hand"]["maximum_nb_of_attempts"], 4)
+        self.assertEqual(content["cover_specs"]["hand"]["cover_place"], "là")
+        self.assertEqual(content["cover_specs"]["hand"]["demanded_std_negative_tests"]["arterite"]["test_oldness"], 27)
         self.assertEqual(content["pedigree"], ['Popa', 'Moman'] + ['']*12)
         self.assertEqual(content["pedigree_po"], "other pedigree po")
         self.assertEqual(content["cover_additional_info"], "other cover additional info")
@@ -323,17 +326,18 @@ class StallionsTest(unittest.TestCase):
                 "Selle Français"
             ],
             "cover_specs": {
-                "iai": {
+                "hand": {
                     "price": 750,
                     "balance_payment_condition": "living_foal_48",
                     "advance_percentage": 50,
                     "cover_place": "ici",
                     "maximum_nb_of_attempts": 3,
-                    "hosting_specs": {
-                        "meadow": {
-                            "price": 6
+                    "demanded_std_negative_tests": {
+                        "arterite": {
+                            "test_oldness": 28
                         }
-                    }
+                    },
+                    "demanded_vaccines": ["tetanos"]
                 }
             },
             "pedigree": [
@@ -370,63 +374,69 @@ class StallionsTest(unittest.TestCase):
 
         # cover_specs
         body["editable_fields_body"]["production_breeds"] = ["Selle Français"]
-        body["editable_fields_body"]["cover_specs"]["iai"] = {
+        body["editable_fields_body"]["cover_specs"]["hand"] = {
             "price": 750,
             "balance_payment_condition": "living_foal_485",
             "advance_percentage": 50,
             "cover_place": "ici",
             "maximum_nb_of_attempts": 3,
-            "hosting_specs": {
-                "meadow": {
-                    "price": 6
+            "demanded_std_negative_tests": {
+                "arterite": {
+                    "test_oldness": 28
                 }
-            }
+            },
+            "demanded_vaccines": ["tetanos"]
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # cover_specs
-        body["editable_fields_body"]["cover_specs"]["iai"] = {
+        body["editable_fields_body"]["cover_specs"]["hand"] = {
             "price": 750,
             "balance_payment_condition": "living_foal_48",
             "advance_percentage": 52,
             "cover_place": "ici",
             "maximum_nb_of_attempts": 3,
-            "hosting_specs": {
-                "meadow": {
-                    "price": 6
+            "demanded_std_negative_tests": {
+                "arterite": {
+                    "test_oldness": 28
                 }
-            }
+            },
+            "demanded_vaccines": ["tetanos"]
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # cover_specs
-        body["editable_fields_body"]["cover_specs"]["iai"] = {
+        body["editable_fields_body"]["cover_specs"]["hand"] = {
             "price": 750,
             "balance_payment_condition": "living_foal_48",
             "advance_percentage": 50,
             "cover_place": "ici",
             "maximum_nb_of_attempts": -1,
-            "hosting_specs": {
-                "meadow": {
-                    "price": 6
+            "demanded_std_negative_tests": {
+                "arterite": {
+                    "test_oldness": 28
                 }
-            }
+            },
+            "demanded_vaccines": ["tetanos"]
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # cover_specs
-        body["editable_fields_body"]["cover_specs"]["iai"] = {
+        body["editable_fields_body"]["cover_specs"]["hand"] = {
             "price": 750,
             "balance_payment_condition": "living_foal_48",
             "advance_percentage": 50,
             "cover_place": "ici",
             "maximum_nb_of_attempts": 3,
-            "hosting_specs": {
-                "meadow": False,
-            }
+            "demanded_std_negative_tests": {
+                "arterite": {
+                    "test_oldness": None
+                }
+            },
+            "demanded_vaccines": ["tetanos"]
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
@@ -437,17 +447,18 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
         # pedigree
-        body["editable_fields_body"]["cover_specs"]["iai"] = {
+        body["editable_fields_body"]["cover_specs"]["hand"] = {
             "price": 750,
             "balance_payment_condition": "living_foal_48",
             "advance_percentage": 50,
             "cover_place": "ici",
             "maximum_nb_of_attempts": 3,
-            "hosting_specs": {
-                "meadow": {
-                    "price": 6
+            "demanded_std_negative_tests": {
+                "arterite": {
+                    "test_oldness": 28
                 }
-            }
+            },
+            "demanded_vaccines": ["tetanos"]
         }
         body["editable_fields_body"]["pedigree"] = [""] * 15
         response = client.post('/stallions/stallion', json=body, headers=headers)
@@ -571,24 +582,31 @@ class StallionsTest(unittest.TestCase):
                 "Boulonnais"
             ],
             "cover_specs": {
-                "iai": {
+                "lib": {
                     "price": 750,
                     "balance_payment_condition": "living_foal_48",
                     "advance_percentage": 50,
                     "cover_place": "ici",
                     "maximum_nb_of_attempts": 3,
-                    "hosting_specs": {
-                        "meadow": {
-                            "price": 6
+                    "demanded_std_negative_tests": {
+                        "arterite": {
+                            "test_oldness": 28
                         }
-                    }
+                    },
+                    "demanded_vaccines": ["tetanos"]
                 },
-                "iac": {
+                "hand": {
                     "price": 1278,
                     "balance_payment_condition": "living_foal_48",
                     "advance_percentage": 50,
-                    "nb_provided_straws": 9,
-                    "left_straws_owner": "seller"
+                    "cover_place": "ici",
+                    "maximum_nb_of_attempts": 3,
+                    "demanded_std_negative_tests": {
+                        "arterite": {
+                            "test_oldness": 28
+                        }
+                    },
+                    "demanded_vaccines": ["tetanos"]
                 }
             },
             "pedigree": [
@@ -954,11 +972,29 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
 
         # cover_type
-        response = client.get('/stallions/search?page=1&limit=16&cover_types=hand&cover_types=iart')
+        response = client.get('/stallions/search?page=1&limit=16&cover_types=hand')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["name"], "Bertrand")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(len(response.json()["content"]), 2)
+        self.assertEqual(response.json()["content"][0]["name"], "Joris")
+        self.assertEqual(
+            response.json()["content"][0]["price"],
+            pricing_utils.calculate_checkout(
+                1278,
+                pricing_utils.calculate_fees_ht(1278, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']),
+                pricing_config['TVA_coeff_HT'],
+                pricing_config['TVA_cover_coeff_HT']
+            ).total
+        )
+        self.assertEqual(response.json()["content"][1]["name"], "Bertrand")
+        self.assertEqual(
+            response.json()["content"][1]["price"],
+            pricing_utils.calculate_checkout(
+                570,
+                pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']),
+                pricing_config['TVA_coeff_HT'],
+                pricing_config['TVA_cover_coeff_HT']
+            ).total
+        )
 
         # testing 422 cover types
         response = client.get('/stallions/search?page=1&limit=16&cover_types=doesnotexist')

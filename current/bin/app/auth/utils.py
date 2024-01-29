@@ -54,10 +54,11 @@ def verify_token(token: str, token_type: str):
         raise HTTPException(status_code=401, detail="invalid token") from exc
 
     _id = payload.get("_id")
+
     if _id is None:
         raise HTTPException(status_code=401)
-    else:
-        return ObjectId(_id)
+
+    return ObjectId(_id)
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)

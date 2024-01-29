@@ -68,14 +68,10 @@ async def register(user: schemas.RegisterQuery, db = Depends(get_db), db_client 
                     "code": code
                 })
 
-                mailing_utils.send_email_verification_email(
+                mailing_utils.send_action_email(
+                    "email_verification",
                     f"{user.firstname} {user.lastname}",
-                    global_config["company_name"],
-                    mailing_config["logo_url"],
-                    f"{global_config['frontend_url']}{mailing_config['email_verification_route']}?code={code}",
-                    mailing_config["service_email"],
-                    mailing_config["password"],
-                    mailing_config["service_email"],
+                    code,
                     user.email
                 )
 

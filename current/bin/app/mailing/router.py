@@ -83,14 +83,10 @@ async def post_send_email_verification_email(current_user = Depends(get_current_
                     "code": code
                 })
 
-                utils.send_email_verification_email(
+                utils.send_action_email(
+                    "email_verification",
                     f"{current_user['firstname']} {current_user['lastname']}",
-                    global_config["company_name"],
-                    config["logo_url"],
-                    f"{global_config['frontend_url']}{config['email_verification_route']}?code={code}",
-                    config["service_email"],
-                    config["password"],
-                    config["service_email"],
+                    code,
                     current_user["email"]
                 )
             except PyMongoError as exc:
@@ -126,14 +122,10 @@ async def send_password_update_email(query: schemas.SendPasswordUpdateEmailQuery
                     "code": code
                 })
 
-                utils.send_password_update_email(
+                utils.send_action_email(
+                    "password_update",
                     f"{user_in_db['firstname']} {user_in_db['lastname']}",
-                    global_config["company_name"],
-                    config["logo_url"],
-                    f"{global_config['frontend_url']}{config['password_update_page']}?code={code}",
-                    config["service_email"],
-                    config["password"],
-                    config["service_email"],
+                    code,
                     query.email
                 )
             except PyMongoError as exc:

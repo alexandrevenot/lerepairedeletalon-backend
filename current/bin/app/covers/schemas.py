@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Annotated
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from fastapi import HTTPException
 
 import app.stallions.utils as stallions_utils
@@ -8,7 +8,6 @@ import app.stallions.schemas as stallions_schemas
 import app.covers.utils as utils
 
 config = utils.load_config()
-
 stallions_config = stallions_utils.load_config()
 
 class CoverQuery(BaseModel):
@@ -19,22 +18,12 @@ class CoverQuery(BaseModel):
     mare_breed: str
     message: str
     cover_type: str
-    provided_cover_place: str
 
     @field_validator('cover_type')
     @classmethod
     def cover_type_validator(cls, v):
         if v not in stallions_config["cover_types"]:
             raise HTTPException(status_code=422, detail="cover type not allowed")
-        return v
-
-    @field_validator('provided_cover_place')
-    @classmethod
-    def provided_cover_place_validator(cls, v, info):
-        if v == "" and info.data["cover_type"] not in stallions_config["onsite_cover_types"]:
-            raise HTTPException(status_code=422, detail="a cover place has to be provided")
-        if v != "" and info.data["cover_type"] not in stallions_config["remote_cover_types"]:
-            raise HTTPException(status_code=422, detail="cannot provide cover place on this cover type")
         return v
 
 class ManuallyStepForwardCoverQuery(BaseModel):
@@ -74,7 +63,6 @@ class GetCoverInformation(BaseModel):
     contact_email: str
     cover_type: str
     cover_specs: Any
-    provided_cover_place: str
     arrival_date: str
     status: str
     price: int
@@ -99,4 +87,8 @@ class StepForwardSignatureQuery(BaseModel):
 
 class EditCoverQuery(BaseModel):
     arrival_date: str = ""
-    new_subtotal: int = None
+    new_subtotal: Annotated[int, Field(
+        strict=True,
+        ge=stallions_config["cover_minimum_price"],
+        default=None
+    )]

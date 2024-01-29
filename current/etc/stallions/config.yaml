@@ -1,12 +1,12 @@
-verification_file_max_size: 10000000 #10Mo
-photo_max_size: 4000000 #4Mo
+verification_file_max_size: 10485760 #10Mo
+photo_max_size: 4194304 #4Mo
 photo_low_res_width: 720 #pixels
 
 allowed_verification_file_content_types:
   - image/jpeg
   - image/jpg
   - image/png
-  - image/pdf
+  - application/pdf
 
 allowed_photos_content_types:
   - image/jpeg
@@ -16,18 +16,12 @@ allowed_photos_content_types:
 cover_types:
   - lib
   - hand
-  - iai
-  - iart
-  - iac
 
 onsite_cover_types:
   - lib
   - hand
-  - iai
 
-remote_cover_types:
-  - iart
-  - iac
+remote_cover_types: []
 
 balance_payment_conditions:
   - covered
@@ -55,3 +49,5 @@ profile_statuses:
   - to_be_validated
   - hidden
   - visible
+
+cover_minimum_price: 10
