@@ -33,7 +33,7 @@ async def get_user_from_object_id(user_id: ObjectId, db, logger):
     try:
         user_in_db = db.users.find_one({"_id": user_id})
     except PyMongoError as exc:
-        logger.error(f'failed to read db: {traceback.format_exc()}')
+        logger.error('failed to read db: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to read db") from exc
 
     if user_in_db is None:
@@ -69,13 +69,22 @@ class CurrentUserGetter:
         try:
             user_in_db = db.users.find_one({'_id': _id})
         except PyMongoError as exc:
-            self.logger.error(f'failed to read db: {traceback.format_exc()}')
+            self.logger.error('failed to read db: %s', traceback.format_exc())
             raise HTTPException(status_code=500, detail='failed to read db') from exc
 
         if user_in_db is None:
             raise HTTPException(status_code=404, detail='user not found')
 
         return user_in_db
+
+async def get_current_user_id(authorization: Annotated[str | None, Header()] = None):
+    try:
+        fields = authorization.split(' ')
+        token = fields[1]
+    except (IndexError, AttributeError) as exc:
+        raise HTTPException(status_code=401, detail='token not found in the request') from exc
+
+    return auth_utils.verify_token(token, 'access')
 
 class CoverInDBGetter:
     def __init__(self, logger):

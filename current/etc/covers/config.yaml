@@ -47,3 +47,15 @@ groups:
     - downpaid
   done:
     - fullypaid
+
+destination-pov-and-status-to-group:
+  seller:
+    requested: pendingApproval
+    buyersigned: pendingSignature
+    downpaid: onGoing
+    fullypaid: done
+  buyer:
+    denied: denied
+    approved: pendingApproval
+    sellersigned: pendingSignature
+    requested: pendingApproval

@@ -5,14 +5,15 @@ import logging.handlers
 import traceback
 
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from pymongo.errors import PyMongoError
 
 import app.contracts.utils as utils
 import app.contracts.schemas as schemas
 import app.covers.router as covers_router
+import app.users.utils as users_utils
 
-from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter, get_db_client
+from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter, get_db_client, get_current_user_id
 
 # configs
 global_config = utils.load_global_config()
@@ -98,13 +99,13 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
 @router.get('/sign-page-url/{cover_id}')
 async def get_sign_page_url(
     cover_in_db = Depends(covers_router.get_cover_in_db),
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     db_client = Depends(get_db_client)
     ):
-    if current_user['_id'] == cover_in_db["seller_id"]:
+    if user_id == cover_in_db["seller_id"]:
         pov = "seller"
-    elif current_user['_id'] == cover_in_db["buyer_id"]:
+    elif user_id == cover_in_db["buyer_id"]:
         pov = "buyer"
     else:
         raise HTTPException(status_code=403, detail="only seller and buyer can get sign page url")
@@ -116,12 +117,17 @@ async def get_sign_page_url(
     if cover_in_db["status"] == "approved":
         url = await engage_signature_process(cover_in_db, db, db_client)
     else:
-        url = cover_in_db["sign_page_urls"][str(current_user["_id"])]
+        url = cover_in_db["sign_page_urls"][str(user_id)]
 
     return schemas.GetSignPageUrl(url=url)
 
 @router.post('/esignatures-webhook')
-async def manage_esignatures_wehbooks(query: schemas.ContractWebhookBody, authorization: Annotated[str | None, Header()] = None, db = Depends(get_db)):
+async def manage_esignatures_wehbooks(
+    query: schemas.ContractWebhookBody,
+    background_tasks: BackgroundTasks,
+    authorization: Annotated[str | None, Header()] = None,
+    db = Depends(get_db)
+):
     try:
         assert authorization.split(" ")[1].encode('utf-8') == base64.b64encode((config["secret-token"] + ":").encode('utf-8'))
     except AssertionError as exc:
@@ -149,7 +155,9 @@ async def manage_esignatures_wehbooks(query: schemas.ContractWebhookBody, author
 
     if cover_in_db["status"] == "signingstarted" and signing_order == "1":
         await covers_router.step_forward_cover(cover_in_db, "buyersigned", db)
+        background_tasks.add_task(users_utils.notify_user, "buyersigned", cover_in_db["_id"], "seller", cover_in_db["seller_id"], db, logger)
     elif cover_in_db["status"] == "buyersigned" and signing_order == "2":
         await covers_router.step_forward_cover(cover_in_db, "sellersigned", db)
+        background_tasks.add_task(users_utils.notify_user, "sellersigned", cover_in_db["_id"], "buyer", cover_in_db["buyer_id"], db, logger)
 
     return {"message": "successfully received webhook"}

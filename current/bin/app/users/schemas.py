@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import HTTPException
-from pydantic import BaseModel, model_validator, conint
+from pydantic import BaseModel, model_validator, Field, model_validator
 
 class GetUserRM(BaseModel):
     firstname: str
@@ -80,14 +81,14 @@ class Review(BaseModel):
     reviewed_lastname: str
     writing_date: str
     content: str
-    score: conint(ge=1, le=5)
+    score: Annotated[int, Field(get=1, le=5)]
 
 class Reviews(BaseModel):
     reviews: list[Review]
 
 class ReviewQuery(BaseModel):
     cover_id: str
-    score: conint(ge=1, le=5)
+    score: Annotated[int, Field(get=1, le=5)]
     content: str
 
 class UserScore(BaseModel):
@@ -96,3 +97,56 @@ class UserScore(BaseModel):
     score: float | None = None
     nb_reviews: int | None = None
     owner_has_other_reviews: bool = False
+
+class BuyerNotifications(BaseModel):
+    denied: list[str] | None = None
+    pendingApproval: list[str] | None = None
+    pendingSignature: list[str] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def calculate_sums(cls, values):
+        return {key: [str(elt) for elt in l] for key, l in values.items()}
+
+class SellerNotifications(BaseModel):
+    pendingApproval: list[str] | None = None
+    pendingSignature: list[str] | None = None
+    onGoing: list[str] | None = None
+    done: list[str] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def calculate_sums(cls, values):
+        return {key: [str(elt) for elt in l] for key, l in values.items()}
+
+class CoverNotifications(BaseModel):
+    buyer: BuyerNotifications | None = None
+    seller: SellerNotifications | None = None
+
+class AcknowledgedCoverNotifications(BaseModel):
+    cover_ids: Annotated[list[str], Field(min_items=1)]
+    pov: str
+    group: str
+
+    @model_validator(mode='before')
+    @classmethod
+    def validate_atts(cls, values):
+        if values.get("pov") == "seller":
+            if values.get("group") not in [
+                "pendingApproval",
+                "pendingSignature",
+                "onGoing",
+                "done"
+            ]:
+                raise HTTPException(status_code=422, detail="group not allowed for this pov")
+        elif values.get("pov") == "buyer":
+            if values.get("group") not in [
+                "pendingApproval",
+                "pendingSignature",
+                "denied"
+            ]:
+                raise HTTPException(status_code=422, detail="group not allowed for this pov")
+        else:
+            raise HTTPException(status_code=422, detail="group not allowed for this pov")
+
+        return values

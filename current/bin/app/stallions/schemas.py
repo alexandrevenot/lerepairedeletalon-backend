@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import HTTPException
-from pydantic import BaseModel, field_validator, model_validator, PositiveFloat, PositiveInt, NonNegativeInt, conint
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 import app.stallions.utils as utils
 
@@ -59,11 +60,6 @@ def check_balance_payment_condition(value):
         raise HTTPException(status_code=422, detail="unallowed balance payment condition")
     return value
 
-def check_hosting_specs(value):
-    if not (value.private | value.collective | value.meadow):
-        raise HTTPException(status_code=422, detail="no hosting specified")
-    return value
-
 def check_vaccines(value):
     for vaccine in value:
         if vaccine not in config["available_vaccines"]:
@@ -88,34 +84,19 @@ class StallionSTDSpecs(BaseModel):
     anemie: SingularStallionSTDSpecs = None
 
 class SingularMareSTDSpecs(BaseModel):
-    test_oldness: conint(ge=config["minimum_std_test_oldness"], le=config["maximum_std_test_oldness"])
+    test_oldness: Annotated[int, Field(strict=True, ge=config["minimum_std_test_oldness"], le=config["maximum_std_test_oldness"])]
 
 class MareSTDSpecs(BaseModel):
     metrite: SingularMareSTDSpecs = None
     arterite: SingularMareSTDSpecs = None
     anemie: SingularMareSTDSpecs = None
 
-class SingularHostingSpecs(BaseModel):
-    price: NonNegativeInt
-
-class HostingSpecs(BaseModel):
-    private: SingularHostingSpecs = None
-    collective: SingularHostingSpecs = None
-    meadow: SingularHostingSpecs = None
-
-    @model_validator(mode='after')
-    def check_that_atleast_one_hosting_type_is_provided(self):
-        if self.private is None and self.collective is None and self.meadow is None:
-            raise HTTPException(status_code=422, detail="atleast one hosting type has to be offered")
-        return self
-
 class LIBandHANDSpecs(BaseModel):
-    price: int
+    price: Annotated[int, Field(strict=True, ge=config["cover_minimum_price"])]
     balance_payment_condition: str
-    advance_percentage: conint(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])
+    advance_percentage: Annotated[int, Field(strict=True, ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])]
     cover_place: str
-    maximum_nb_of_attempts: PositiveInt
-    hosting_specs: HostingSpecs
+    maximum_nb_of_attempts: Annotated[int, Field(strict=True, ge=1)]
     demanded_std_negative_tests: MareSTDSpecs
     demanded_vaccines: list[str] = []
 
@@ -129,49 +110,13 @@ class LIBandHANDSpecs(BaseModel):
     def demanded_vaccines_validator(cls, value):
         return check_vaccines(value)
 
-class IAISpecs(BaseModel):
-    price: int
-    balance_payment_condition: str
-    advance_percentage: conint(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])
-    cover_place: str
-    maximum_nb_of_attempts: PositiveInt
-    hosting_specs: HostingSpecs
-
-    @field_validator('balance_payment_condition')
-    @classmethod
-    def balance_payment_condition_validator(cls, value):
-        return check_balance_payment_condition(value)
-
-class IARTSpecs(BaseModel):
-    price: int
-    balance_payment_condition: str
-    advance_percentage: conint(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])
-    nb_provided_straws: PositiveInt
-
-class IACSpecs(BaseModel):
-    price: int
-    balance_payment_condition: str
-    advance_percentage: conint(ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])
-    nb_provided_straws: PositiveInt
-    left_straws_owner: str
-
-    @field_validator('left_straws_owner')
-    @classmethod
-    def left_straws_owner_validator(cls, value):
-        if value not in ["seller", "buyer"]:
-            raise HTTPException(status_code=422, detail="left_straws_owner has to be either 'seller' or 'buyer'")
-        return value
-
 class CoverSpecs(BaseModel):
     lib: LIBandHANDSpecs = None
     hand: LIBandHANDSpecs = None
-    iai: IAISpecs = None
-    iart: IARTSpecs = None
-    iac: IACSpecs = None
 
     @model_validator(mode='after')
     def check_that_atleast_one_cover_type_is_provided(self):
-        if not (self.lib or self.hand or self.iai or self.iart or self.iac):
+        if not (self.lib or self.hand):
             raise HTTPException(status_code=422, detail="atleast one cover type has to be offered")
 
         return self
@@ -179,7 +124,7 @@ class CoverSpecs(BaseModel):
 class EditableStallionFields(BaseModel):
     main_desc: str
     color: str
-    height: PositiveFloat
+    height: Annotated[float, Field(ge=0)]
     lat: float
     lng: float
     city: str

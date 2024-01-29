@@ -3,10 +3,9 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-#from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
-
-#import app.middleware as middleware
+from app import middleware
 
 dirs = ["log", "run"]
 for d in dirs:
@@ -49,10 +48,10 @@ server.add_middleware(
     allow_headers=["*"],
 )
 
-# server.add_middleware(
-#     BaseHTTPMiddleware,
-#     dispatch=middleware.Middleware()
-# )
+server.add_middleware(
+    BaseHTTPMiddleware,
+    dispatch=middleware.Middleware()
+)
 
 params = {
     "host": "localhost",

@@ -109,16 +109,11 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             ],
             "cover_specs": {
                 "lib": {
-                    "price": 425,
+                    "price": 750,
                     "balance_payment_condition": "living_foal_48",
-                    "advance_percentage": 50,
+                    "advance_percentage": 40,
                     "cover_place": "ici2",
                     "maximum_nb_of_attempts": 3,
-                    "hosting_specs": {
-                        "meadow": {
-                            "price": 6
-                        }
-                    },
                     "demanded_std_negative_tests": {
                         "metrite": {
                             "test_oldness": 30,
@@ -128,13 +123,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
                         }
                     },
                     "demanded_vaccines": []
-                },
-                "iac": {
-                    "price": 750,
-                    "balance_payment_condition": "living_foal_48",
-                    "advance_percentage": 40,
-                    "nb_provided_straws": 9,
-                    "left_straws_owner": "seller"
                 }
             },
             "pedigree": [
@@ -204,8 +192,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
 
@@ -228,8 +215,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
 
@@ -245,8 +231,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=owner_headers)
         self.assertEqual(response.status_code, 400)
@@ -259,8 +244,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 404)
@@ -273,8 +257,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 404)
@@ -287,8 +270,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
@@ -301,11 +283,11 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "wtf",
-            "provided_cover_place": "ici"
+            "cover_type": "wtf"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+
 
         # REQUESTED
         # when everything is fine
@@ -316,8 +298,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Bernadette de Normandie",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 200)
@@ -330,7 +311,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_in_db["mare_name"], "Bernadette de Normandie")
         self.assertEqual(cover_in_db["mare_breed"], "Boulonnais")
         self.assertEqual(cover_in_db["message"], "Yo")
-        self.assertEqual(cover_in_db["cover_type"], "iac")
+        self.assertEqual(cover_in_db["cover_type"], "lib")
 
         self.assertEqual(cover_in_db["status"], config["status"][0])
         buyer_in_db = fake_db.users.find_one({"firstname": "Joris"})
@@ -339,12 +320,25 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_in_db["stallion_breed"], stallion_in_db["breed"])
         self.assertEqual(cover_in_db["stallion_production_breeds"], stallion_in_db["production_breeds"])
         self.assertEqual(cover_in_db["cover_specs"]["balance_payment_condition"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["balance_payment_condition"])
-        self.assertEqual(cover_in_db["cover_specs"]["left_straws_owner"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["left_straws_owner"])
+        self.assertEqual(cover_in_db["cover_specs"]["cover_place"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["cover_place"])
+        self.assertEqual(cover_in_db["cover_specs"]["maximum_nb_of_attempts"], stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["maximum_nb_of_attempts"])
+        self.assertEqual(
+            cover_in_db["cover_specs"]["demanded_std_negative_tests"]["metrite"]["test_oldness"],
+            stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["demanded_std_negative_tests"]["metrite"]["test_oldness"]
+        )
+        self.assertEqual(
+            cover_in_db["cover_specs"]["demanded_std_negative_tests"]["arterite"]["test_oldness"],
+            stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["demanded_std_negative_tests"]["arterite"]["test_oldness"]
+        )
+        self.assertEqual(
+            cover_in_db["cover_specs"]["demanded_vaccines"],
+            stallion_in_db["cover_specs"][cover_in_db["cover_type"]]["demanded_vaccines"]
+        )
+
         self.assertEqual(cover_in_db["timestamps"]["cursor_index"], 1)
         self.assertTrue(cover_in_db["timestamps"]["timestamps_list"][0]["timestamp"] < datetime.datetime.now())
         for timestamp in cover_in_db["timestamps"]["timestamps_list"][1:]:
             self.assertIsNone(timestamp["timestamp"])
-        self.assertEqual(cover_in_db["provided_cover_place"], "ici")
         self.assertEqual(cover_in_db["subtotal_ht"], 750)
         self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
         self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
@@ -402,8 +396,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "mare_name": "Mauricette",
             "mare_breed": "Boulonnais",
             "message": "Yo",
-            "cover_type": "iac",
-            "provided_cover_place": "ici"
+            "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
         self.assertEqual(response.status_code, 200)
@@ -455,8 +448,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["mare_name"], "Bernadette de Normandie")
         self.assertEqual(cover_information_json["mare_breed"], "Boulonnais")
         self.assertEqual(cover_information_json["mare_nsire"], "64853156156X")
-        self.assertEqual(cover_information_json["cover_type"], "iac")
-        self.assertEqual(cover_information_json["provided_cover_place"], "ici")
+        self.assertEqual(cover_information_json["cover_type"], "lib")
         self.assertEqual(cover_information_json["status"], "requested")
         self.assertEqual(cover_information_json["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) + math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
@@ -479,8 +471,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["mare_name"], "Bernadette de Normandie")
         self.assertEqual(cover_information_json["mare_breed"], "Boulonnais")
         self.assertEqual(cover_information_json["mare_nsire"], "64853156156X")
-        self.assertEqual(cover_information_json["cover_type"], "iac")
-        self.assertEqual(cover_information_json["provided_cover_place"], "ici")
+        self.assertEqual(cover_information_json["cover_type"], "lib")
         self.assertEqual(cover_information_json["status"], "requested")
         self.assertEqual(cover_information_json["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) - math.ceil(45*1.2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
@@ -525,35 +516,14 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["price"], math.ceil(300*(1+pricing_config["TVA_cover_coeff_HT"])) - math.ceil(0.06 * 300 * 1.2))
 
-        response = client.put(f'/covers/cover/{cover_id}', json={"arrival_date": "28/10/1998"}, headers=owner_headers)
-        self.assertEqual(response.status_code, 403)
-
-        response = client.put(f'/covers/cover/{cover_id}', json={"new_subtotal": 750}, headers=owner_headers)
+        response = client.put(f'/covers/cover/{cover_id}', json={"arrival_date": "30/03/2024"}, headers=owner_headers)
         self.assertEqual(response.status_code, 200)
-
-        # quick tests on a cover type allowing to set arrival date
-
-        body = {
-            "seller_id": str(stallion_in_db["owner"]),
-            "stallion_nsire": "65123458X",
-            "mare_nsire": "7413214Y",
-            "mare_name": "Marie-Jeanne",
-            "mare_breed": "Arabe",
-            "message": "Yo",
-            "cover_type": "lib",
-            "provided_cover_place": ""
-        }
-        response = client.post('/covers/cover', json=body, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        temp_cover_id = str(fake_db.covers.find_one({"mare_name": "Marie-Jeanne"})["_id"])
-
-        response = client.put(f'/covers/cover/{temp_cover_id}', json={"arrival_date": "30/03/2024"}, headers=owner_headers)
-        self.assertEqual(response.status_code, 200)
-        response = client.get(f'/covers/cover/{temp_cover_id}', headers=owner_headers)
+        response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["arrival_date"], "30/03/2024")
 
-        fake_db.covers.delete_one({"_id": ObjectId(temp_cover_id)})
+        response = client.put(f'/covers/cover/{cover_id}', json={"new_subtotal": 750}, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
 
         # APPROVED
         # approve cover request
@@ -645,6 +615,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
             # when ok
             response = client.get(f'/contracts/sign-page-url/{cover_id}', headers=headers)
+            print(f"{response.json()=}")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(contracts_router.utils.create_and_send_contract.call_args_list), 1)
             self.assertEqual(response.json()["url"], "first_signer_sign_page_url")

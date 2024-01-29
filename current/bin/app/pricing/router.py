@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 import app.pricing.schemas as schemas
 import app.pricing.utils as utils
 
-from app.dependencies import CurrentUserGetter, CoverInDBGetter
+from app.dependencies import CoverInDBGetter, get_current_user_id
 
 # config
 config = utils.load_config()
@@ -25,7 +25,6 @@ logger.addHandler(handler)
 logger.info('Logger initialized')
 
 # dependencies
-get_current_user = CurrentUserGetter(logger)
 get_cover_in_db = CoverInDBGetter(logger)
 
 # routes
@@ -38,8 +37,8 @@ async def get_checkout_simulation(subtotal: int):
 
 # to be updated with mangopay
 @router.get('/checkout/{cover_id}', response_model=schemas.Checkout)
-async def get_checkout(cover_in_db = Depends(get_cover_in_db), current_user = Depends(get_current_user)):    
-    if current_user["_id"] != cover_in_db["buyer_id"]:
+async def get_checkout(cover_in_db = Depends(get_cover_in_db), user_id = Depends(get_current_user_id)):
+    if user_id != cover_in_db["buyer_id"]:
         raise HTTPException(status_code=403, detail="only buyer can get checkout")
 
     if cover_in_db["status"] == "sellersigned":

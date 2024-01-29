@@ -13,7 +13,7 @@ from pymongo.errors import PyMongoError
 import app.users.utils as utils
 import app.users.schemas as schemas
 
-from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
+from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter, get_current_user_id
 
 # configs
 global_config = utils.load_global_config()
@@ -105,7 +105,7 @@ async def put_contractual_identity(query: schemas.PutContractualIdentityQuery, c
 async def get_user_reviews(
     review_pov: str, # given or received
     cover_pov: str, # as buyer or as seller
-    current_user = Depends(get_current_user),
+    _ = Depends(get_current_user),
     user_in_db = Depends(get_user_in_db),
     db = Depends(get_db)
 ):
@@ -277,7 +277,7 @@ async def post_user_review(
 async def get_user_score(
     cover_pov: str, # as buyer or as seller
     stallion_nsire: str = None,
-    current_user = Depends(get_current_user),
+    _ = Depends(get_current_user),
     user_in_db = Depends(get_user_in_db)
 ):
     if cover_pov not in ["seller", "buyer"]:
@@ -404,3 +404,38 @@ async def put_bank_identity(
                 raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully added bank_identity_file"}
+
+@router.get('/cover-notifications')
+async def get_cover_notifications(current_user = Depends(get_current_user)):
+    try:
+        return schemas.CoverNotifications(**current_user["notifications"]["covers"])
+    except (TypeError, KeyError):
+        return schemas.CoverNotifications()
+
+@router.post('/cover-notifications')
+async def post_cover_notifications(
+    query: schemas.AcknowledgedCoverNotifications,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    try:
+        db.users.update_one(
+            {
+                "_id": current_user["_id"]
+            },
+            {
+                "$pull": {
+                    f"notifications.covers.{query.pov}.{query.group}": {
+                        "$in": [ObjectId(cover_id) for cover_id in query.cover_ids]
+                    }
+                }
+            }
+        )
+
+    except PyMongoError as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+    except Exception as exc:
+        logger.error("failed to write object storage: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to write object storage") from exc

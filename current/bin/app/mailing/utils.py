@@ -10,14 +10,16 @@ def load_config() -> dict:
     with open('/lerepairedeletalon/server/current/etc/mailing/config.yaml', 'r') as f:
         return yaml.load(f, Loader=yaml.FullLoader)
 
-def build_mail_content(
-    logo_url: str,
+config = load_config()
+global_config = load_global_config()
+
+def build_email_content(
     verification_link: str,
     title: str,
     header: str,
     action: str,
     button_name: str
-    ) -> str:
+) -> str:
     return f"""
     <!DOCTYPE html>
     <html>
@@ -27,7 +29,7 @@ def build_mail_content(
         <style>
             .container {{
                 text-align: center;
-                background-color: #F5F5F5; /* Couleur blanc cassé */
+                background-color: #f7faf7;
             }}
             .bouton-validation {{
                 background-color: #007BFF;
@@ -44,7 +46,7 @@ def build_mail_content(
     </head>
     <body class="container">
         <header style="text-align: center;">
-            <img src={logo_url} alt="Logo" width="150">
+            <img src={config["logo_url"]} alt="Logo" width="150">
         </header>
 
         <div style="padding: 20px;">
@@ -56,67 +58,129 @@ def build_mail_content(
         </div>
 
         <footer style="background-color: #f0f0f0; padding: 10px; text-align: center;">
-            © 2023 Le Repaire de l'Étalon. Tous droits réservés.
+            © 2024 SAS LRDE. Tous droits réservés.
         </footer>
     </body>
     </html>
 
     """
 
-def send_email_verification_email(
+def send_action_email(
+    email_type: str,
     send_to: str,
-    sent_from: str,
-    logo_url: str,
-    verification_link: str,
-    sender_email: str,
-    password: str,
-    fromaddr: str,
+    code: str,
     toaddrs: str
-    ) -> None:
+) -> None:
     message = EmailMessage()
     message["To"] = send_to
-    message["From"] = sent_from
-    message["Subject"] = 'Vérifiez votre adresse e-mail'
-    message.set_content(build_mail_content(
-        logo_url,
-        verification_link,
-        "Vérification de l'adresse e-mail",
-        "Vérification de votre adresse e-mail",
-        "vérifier votre adresse e-mail",
-        "Vérifier mon adresse e-mail"
-    ), subtype='html')
+    message["From"] = global_config["company_name"]
+
+    if email_type == "email_verification":
+        message["Subject"] = 'Vérifiez votre adresse e-mail'
+        message.set_content(build_email_content(
+            f"{global_config['frontend_url']}{config['email_verification_route']}?code={code}",
+            "Vérification de l'adresse e-mail",
+            "Vérification de votre adresse e-mail",
+            "vérifier votre adresse e-mail",
+            "Vérifier mon adresse e-mail"
+        ), subtype='html')
+    elif email_type == "password_update":
+        message["Subject"] = 'Changez votre mot de passe'
+        message.set_content(build_email_content(
+            f"{global_config['frontend_url']}{config['password_update_page']}?code={code}",
+            "Changement de mot de passe",
+            "Changement de votre mot de passe",
+            "mettre à jour votre mot de passe",
+            "Mettre à jour mon mot de passe"
+        ), subtype='html')
 
     with smtplib.SMTP('smtp.gmail.com', 587) as server:
         server.ehlo('Gmail')
         server.starttls()
-        server.login(sender_email, password)
-        server.sendmail(fromaddr, toaddrs, message.as_string())
+        server.login(config["service_email"], config["password"])
+        server.sendmail(config["service_email"], toaddrs, message.as_string())
 
-def send_password_update_email(
+def send_notification_email(
     send_to: str,
-    sent_from: str,
-    logo_url: str,
-    verification_link: str,
-    sender_email: str,
-    password: str,
-    fromaddr: str,
-    toaddrs: str
-    ) -> None:
+    toaddrs: str,
+    contact_firstname: str,
+    new_status: str,
+    destination_pov: str
+):
+    if destination_pov == "buyer" and new_status == "requested":
+        return
+
     message = EmailMessage()
     message["To"] = send_to
-    message["From"] = sent_from
-    message["Subject"] = 'Changez votre mot de passe'
-    message.set_content(build_mail_content(
-        logo_url,
-        verification_link,
-        "Changement mot de passe",
-        "Changement de votre mot de passe",
-        "mettre à jour votre mot de passe",
-        "Mettre à jour mon mot de passe"
-    ), subtype='html')
+    message["From"] = global_config["company_name"]
+    if destination_pov == "seller":
+        if new_status == "requested":
+            message["Subject"] = 'Nouvelle demande de saillie'
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Nouvelle demande de saillie",
+                f"Nouvelle demande de saillie de {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
+        elif new_status == "buyersigned":
+            message["Subject"] = "Contrat signé par l'acheteur"
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Contrat signé par l'acheteur",
+                f"Contrat signé par {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
+        elif new_status == "downpaid":
+            message["Subject"] = "Acompte payé par l'acheteur"
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Acompte payé par l'acheteur",
+                f"Acompte payé par {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
+        elif new_status == "fullypaid":
+            message["Subject"] = "Solde payé par l'acheteur"
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Solde payé par l'acheteur",
+                f"Solde payé par {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
+    elif destination_pov == "buyer":
+        if new_status == "denied":
+            message["Subject"] = "Saillie refusée par le vendeur"
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Saillie refusée par le vendeur",
+                f"Saillie refusée par {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
+        elif new_status == "approved":
+            message["Subject"] = "Saillie acceptée par le vendeur"
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Saillie acceptée par le vendeur",
+                f"Saillie acceptée par {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
+        elif new_status == "sellersigned":
+            message["Subject"] = "Contrat signé par le vendeur"
+            message.set_content(build_email_content(
+                f"{global_config['frontend_url']}/dashboard",
+                "Contrat signé par le vendeur",
+                f"Contrat signé par {contact_firstname}",
+                "consulter votre tableau de bord",
+                "Consulter mon tableau de bord"
+            ), subtype='html')
 
     with smtplib.SMTP('smtp.gmail.com', 587) as server:
         server.ehlo('Gmail')
         server.starttls()
-        server.login(sender_email, password)
-        server.sendmail(fromaddr, toaddrs, message.as_string())
+        server.login(config["service_email"], config["password"])
+        server.sendmail(config["service_email"], toaddrs, message.as_string())

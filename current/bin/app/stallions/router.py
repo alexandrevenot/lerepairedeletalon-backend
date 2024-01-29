@@ -13,7 +13,7 @@ import app.stallions.schemas as schemas
 import app.geoloc.utils as geoloc_utils
 import app.pricing.utils as pricing_utils
 
-from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client, BucketGetter
+from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client, BucketGetter, get_current_user_id
 
 # configs
 global_config = utils.load_global_config()
@@ -167,14 +167,14 @@ async def search(
     return schemas.SearchRM(content=mp_l)
 
 @router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformationForFavorite | schemas.StallionProfileInformation | schemas.StallionProfileInformationForEdition)
-async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), current_user = Depends(get_current_user)):
+async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), user_id = Depends(get_current_user_id)):
     if mode not in ['for_favorite', 'profile', 'for_edition']:
         raise HTTPException(status_code=422, detail="mode has to be either 'for_favorite', 'profile' or 'for_edition'")
 
     if mode == 'profile' and stallion_in_db["profile_status"] != "visible":
         raise HTTPException(status_code=403, detail="stallion profile information cant be fetched")
 
-    if mode == 'for_edition' and current_user["_id"] != stallion_in_db["owner"]:
+    if mode == 'for_edition' and user_id != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can get stallion information for edition")
 
     if mode == 'for_favorite':
@@ -229,8 +229,8 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
     return kwargs
 
 @router.get('/my-stallions', response_model=schemas.GetMyStallionsRM)
-async def get_my_stallions(current_user = Depends(get_current_user), db = Depends(get_db)):
-    query = {"owner": current_user['_id']}
+async def get_my_stallions(user_id = Depends(get_current_user_id), db = Depends(get_db)):
+    query = {"owner": user_id}
 
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "thumbnail_photo": 1, "profile_status": 1, "last_update_timestamp":1})
@@ -255,7 +255,9 @@ async def get_my_stallions(current_user = Depends(get_current_user), db = Depend
 async def register_new_stallion(
     final_fields_body: schemas.FinalStallionFields,
     editable_fields_body: schemas.EditableStallionFields,
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
+    _1 = Depends(get_stalllion_photos_bucket),
+    _2 = Depends(get_admin_files_bucket), # to check that it works before calling POST /stallion-files
     db = Depends(get_db)
 ):
     # fields parsing
@@ -292,7 +294,7 @@ async def register_new_stallion(
 
     try:
         insert_one_result = db.stallions.insert_one({
-            "owner": current_user["_id"],
+            "owner": user_id,
             "name": final_fields_body.name,
             "breed": final_fields_body.breed,
             "n_sire": final_fields_body.n_sire,
@@ -333,13 +335,13 @@ async def register_new_stallion_files(
     verification_file: Annotated[UploadFile, File()],
     photos: Annotated[list[UploadFile], File()],
     stallion_in_db = Depends(get_stallion_in_db),
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
     admin_files_bucket = Depends(get_admin_files_bucket),
     db_client = Depends(get_db_client)
 ):
-    if current_user["_id"] != stallion_in_db["owner"]:
+    if user_id != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can post stallion files")
 
     if "photos" in stallion_in_db or "verification_file" in stallion_in_db:
@@ -349,6 +351,7 @@ async def register_new_stallion_files(
         raise HTTPException(status_code=422, detail="there must be between 1 and 5 photos")
 
     if verification_file.content_type not in config['allowed_verification_file_content_types']:
+        print(verification_file.content_type)
         raise HTTPException(status_code=422, detail="verification file type not allowed")
 
     if verification_file.size > config['verification_file_max_size']:
@@ -421,10 +424,10 @@ async def register_new_stallion_files(
 async def edit_stallion_profile(
     editable_fields_body: schemas.EditableStallionFields,
     stallion_in_db = Depends(get_stallion_in_db),
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
     db = Depends(get_db)
 ):
-    if current_user["_id"] != stallion_in_db["owner"]:
+    if user_id != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can edit stallion")
 
     location = {
@@ -482,7 +485,7 @@ async def update_stallion_photos(
     kept_photos: list[int] = None, # photos indexes to keep, ex: [0, 2, 3]
     new_photos: Annotated[list[UploadFile], File()] = None,
     stallion_in_db = Depends(get_stallion_in_db),
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     db_client = Depends(get_db_client),
     stallion_photos_bucket = Depends(get_stalllion_photos_bucket)
@@ -492,7 +495,7 @@ async def update_stallion_photos(
     if new_photos is None:
         new_photos = []
 
-    if current_user["_id"] != stallion_in_db["owner"]:
+    if user_id != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can update stallion photos")
 
     if "photos" not in stallion_in_db or "thumbnail_photo" not in stallion_in_db:
@@ -611,19 +614,28 @@ async def update_stallion_photos(
 @router.delete('/stallion/{stallion_id}')
 async def delete_stallion(
     stallion_in_db = Depends(get_stallion_in_db),
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     db_client = Depends(get_db_client),
     stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
     admin_files_bucket = Depends(get_admin_files_bucket)
     ):
-    if current_user["_id"] != stallion_in_db["owner"]:
+    if user_id != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can delete stallion")
 
     with db_client.start_session() as session:
         with session.start_transaction():
             try:
                 db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+
+                db.users.update_many(
+                    {"favorite_stallions": {"$exists": True, "$in": [stallion_in_db["_id"]]}},
+                    {
+                        "$pull": {
+                            "favorite_stallions": stallion_in_db["_id"]
+                        }
+                    }
+                )
 
                 if "photos" in stallion_in_db:
                     old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
@@ -651,10 +663,10 @@ async def delete_stallion(
 async def update_stallion_profile_status(
     new_status: str,
     stallion_in_db = Depends(get_stallion_in_db),
-    current_user = Depends(get_current_user),
+    user_id = Depends(get_current_user_id),
     db = Depends(get_db)
     ):
-    if current_user["_id"] != stallion_in_db["owner"]:
+    if user_id != stallion_in_db["owner"]:
         raise HTTPException(status_code=403, detail="only owner can change stallion profile status")
 
     if new_status == "visible":
