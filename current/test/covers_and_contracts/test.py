@@ -67,7 +67,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "lrdeservice@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
@@ -169,7 +169,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "firstname": "Joris",
             "lastname": "Lagraphe",
             "email": "lrdeservice2@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
@@ -413,7 +413,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "firstname": "Jocelin",
             "lastname": "Verdier",
             "email": "lrdeservice3@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
@@ -479,7 +479,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["notes"], "")
         self.assertEqual(cover_information_json["contact_firstname"], "Joris")
         self.assertEqual(cover_information_json["contact_lastname"], "Lagraphe")
-        self.assertEqual(cover_information_json["contact_phone_number"], "+33665824651")
+        self.assertEqual(cover_information_json["contact_phone_number"], "0665824651")
         self.assertEqual(cover_information_json["contact_email"], "lrdeservice2@gmail.com")
         self.assertEqual(cover_information_json["pov"], "seller")
 

@@ -150,3 +150,6 @@ class AcknowledgedCoverNotifications(BaseModel):
             raise HTTPException(status_code=422, detail="group not allowed for this pov")
 
         return values
+
+class DeleteAccountQuery(BaseModel):
+    passphrase: Annotated[str, Field(pattern="Supprimer mon compte")]

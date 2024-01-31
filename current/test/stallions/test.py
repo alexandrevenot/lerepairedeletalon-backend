@@ -53,7 +53,7 @@ class StallionsTest(unittest.TestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "lrdeservice@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
@@ -508,7 +508,7 @@ class StallionsTest(unittest.TestCase):
             "firstname": "Joris",
             "lastname": "Lagraphe",
             "email": "lrdeservice2@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
