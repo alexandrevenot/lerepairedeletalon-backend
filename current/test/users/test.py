@@ -35,7 +35,7 @@ class UsersTest(unittest.TestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "lrdeservice@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
@@ -67,7 +67,7 @@ class UsersTest(unittest.TestCase):
         self.assertEqual(returned_json["firstname"], "Michel")
         self.assertEqual(returned_json["lastname"], "Dupont")
         self.assertEqual(returned_json["email"], "lrdeservice@gmail.com")
-        self.assertEqual(returned_json["phone_number"], "+33665824651")
+        self.assertEqual(returned_json["phone_number"], "0665824651")
         self.assertEqual(returned_json["contractual_identity"], None)
 
         # try to put contracts identity but bad date format
@@ -100,7 +100,7 @@ class UsersTest(unittest.TestCase):
         self.assertEqual(returned_json["firstname"], "Michel")
         self.assertEqual(returned_json["lastname"], "Dupont")
         self.assertEqual(returned_json["email"], "lrdeservice@gmail.com")
-        self.assertEqual(returned_json["phone_number"], "+33665824651")
+        self.assertEqual(returned_json["phone_number"], "0665824651")
         self.assertEqual(returned_json["contractual_identity"], None)
 
         # put contracts identity when the body is right

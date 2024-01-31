@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 
 EMAIL_PATTERN = r'^[\w\.-]+@[\w\.-]+\.\w+$'
-PHONE_NUMBER_PATTERN = r'^\+33\d{9}$'
+PHONE_NUMBER_PATTERN = r'^\d{10}$'
 
 class RegisterQuery(BaseModel):
     firstname: str
@@ -42,11 +42,3 @@ class RefreshTokenQuery(BaseModel):
             raise HTTPException(status_code=422, detail="token not found in the request")
 
         return fields[1]
-
-class UserInDB(BaseModel):
-    firstname: str
-    lastname: str
-    email: str
-    phone_number: str
-    hashedpassword: str
-    email_is_verified: bool

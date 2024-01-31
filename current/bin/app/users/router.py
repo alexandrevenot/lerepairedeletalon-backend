@@ -13,7 +13,7 @@ from pymongo.errors import PyMongoError
 import app.users.utils as utils
 import app.users.schemas as schemas
 
-from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter, get_current_user_id
+from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
 
 # configs
 global_config = utils.load_global_config()
@@ -37,6 +37,7 @@ logger.info('Logger initialized')
 get_user_in_db = UserInDBGetter(logger)
 get_current_user = CurrentUserGetter(logger)
 get_cover_in_db = CoverInDBGetter(logger)
+get_stalllion_photos_bucket = BucketGetter(global_config['stallion_photos_bucket_name'])
 get_admin_files_bucket = BucketGetter(global_config['admin_files_bucket_name'])
 
 # routes
@@ -439,3 +440,59 @@ async def post_cover_notifications(
     except Exception as exc:
         logger.error("failed to write object storage: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+
+@router.put('/delete-account')
+async def delete_account(
+    _: schemas.DeleteAccountQuery,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db),
+    db_client = Depends(get_db_client),
+    stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
+    admin_files_bucket = Depends(get_admin_files_bucket)
+):
+    with db_client.start_session() as session:
+        with session.start_transaction():
+            try:
+                db.password_update_codes.delete_many({
+                    "email": current_user["email"]
+                })
+
+                db.email_verification_codes.delete_many({
+                    "email": current_user["email"]
+                })
+
+                for stallion_in_db in db.stallions.find({"owner": current_user["_id"]}):
+                    db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+
+                    db.users.update_many(
+                        {"favorite_stallions": {"$exists": True, "$in": [stallion_in_db["_id"]]}},
+                        {
+                            "$pull": {
+                                "favorite_stallions": stallion_in_db["_id"]
+                            }
+                        }
+                    )
+
+                    if "photos" in stallion_in_db:
+                        old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
+                        old_photo_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in stallion_in_db["photos"]]
+
+                        old_tp_blob.delete()
+                        for blob in old_photo_blobs:
+                            blob.delete()
+
+                    if "verification_file" in stallion_in_db:
+                        vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
+                        vf_blob.delete()
+
+                db.users.delete_one({"_id": current_user["_id"]})
+
+            except PyMongoError as exc:
+                logger.error("failed to write db: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+            except Exception as exc:
+                logger.error("failed to write object storage: %s", traceback.format_exc())
+                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+
+    return {"message": "successfully deleted account"}

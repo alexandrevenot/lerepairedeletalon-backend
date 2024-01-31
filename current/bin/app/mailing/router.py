@@ -104,7 +104,7 @@ async def send_password_update_email(query: schemas.SendPasswordUpdateEmailQuery
     try:
         user_in_db = db.users.find_one({"email": query.email})
     except PyMongoError as exc:
-        logger.error('failed to write db: %s', traceback.format_exc())
+        logger.error('failed to read db: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
 
     if user_in_db is None:

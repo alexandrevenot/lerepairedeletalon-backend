@@ -34,7 +34,7 @@ class AuthTest(unittest.TestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "oungabounga",
-            "phone_number": "+33654321457",
+            "phone_number": "0654321457",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 422)
@@ -44,7 +44,7 @@ class AuthTest(unittest.TestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "lrdeservice@gmail.com",
-            "phone_number": "8654321457",
+            "phone_number": "86543214579",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 422)
@@ -54,7 +54,7 @@ class AuthTest(unittest.TestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "lrdeservice@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 200)
@@ -70,7 +70,7 @@ class AuthTest(unittest.TestCase):
             "firstname": "Michel",
             "lastname": "Dupont",
             "email": "lrdeservice@gmail.com",
-            "phone_number": "+33665824651",
+            "phone_number": "0665824651",
             "password": "acjiodfehy"
         })
         self.assertEqual(response.status_code, 400)

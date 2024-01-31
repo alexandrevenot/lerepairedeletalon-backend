@@ -47,19 +47,19 @@ async def register(user: schemas.RegisterQuery, db = Depends(get_db), db_client 
     if user_in_db is not None:
         raise HTTPException(status_code=400, detail='a user already exists with this email')
 
-    user_to_create = schemas.UserInDB(
-        firstname = user.firstname,
-        lastname = user.lastname,
-        email = user.email,
-        phone_number = user.phone_number,
-        hashedpassword = utils.get_password_hash(user.password),
-        email_is_verified = False
-    )
+    user_to_create = {
+        "firstname": user.firstname,
+        "lastname": user.lastname,
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "hashedpassword": utils.get_password_hash(user.password),
+        "email_is_verified": False
+    }
 
     with db_client.start_session() as session:
         with session.start_transaction():
             try:
-                db.users.insert_one(user_to_create.model_dump())
+                db.users.insert_one(user_to_create)
 
                 code = utils.generate_sensitive_action_code(user.email, os.urandom(16).hex())
 
