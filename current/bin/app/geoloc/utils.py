@@ -2,23 +2,43 @@ import pandas as pd
 import bisect
 import unicodedata
 
-NORMALIZED_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/geoloc_normalized.csv', sep=",")
-COMPLETE_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/geoloc_not_normalized.csv', sep=",")
-FRENCH_DEPS_DF = pd.read_csv('/lerepairedeletalon/server/current/etc/geoloc/french_deps.csv', sep=",")
+NORMALIZED_DF = pd.read_csv(
+    '/lerepairedeletalon/server/current/etc/geoloc/geoloc_normalized.csv',
+    sep=",",
+    dtype={"city": str}
+)
+COMPLETE_DF = pd.read_csv(
+    '/lerepairedeletalon/server/current/etc/geoloc/geoloc_not_normalized.csv',
+    sep=",",
+    dtype={
+        "postal_code": str,
+        "city": str,
+        "lat": float,
+        "lng": float
+    }
+)
+FRENCH_DEPS_DF = pd.read_csv(
+    '/lerepairedeletalon/server/current/etc/geoloc/french_deps.csv',
+    sep=",",
+    dtype={
+        "code": str,
+        "dep": str,
+        "reg": str
+    }
+)
 
-COMPLETE_DF['postal_code'] = COMPLETE_DF['postal_code'].astype(str)
-
-def find_city_not_normalized(city) -> list[pd.core.series.Series]:
+def find_city_not_normalized(city: str) -> list[pd.core.series.Series]:
+    characters_nb = len(city)
     unfiltered_cities = []
-    index = bisect.bisect_left(NORMALIZED_DF.loc[:,'city'], city)
+    index = bisect.bisect_left(NORMALIZED_DF.loc[:,'city'], city, key=lambda x: x[:characters_nb])
 
-    if not (index and NORMALIZED_DF.loc[index, 'city'] == city):
+    if not NORMALIZED_DF.loc[index, 'city'][:characters_nb] == city:
         return []
 
     unfiltered_cities.append(COMPLETE_DF.loc[index,:])
     index += 1
 
-    while NORMALIZED_DF.loc[index, 'city'] == city:
+    while NORMALIZED_DF.loc[index, 'city'][:characters_nb] == city:
         unfiltered_cities.append(COMPLETE_DF.loc[index,:])
         index += 1
 
@@ -31,11 +51,10 @@ def find_city_not_normalized(city) -> list[pd.core.series.Series]:
             cities_with_common_coordinates[key] = [found_city]
 
     cities_to_return = []
-    for _, cities in cities_with_common_coordinates.items():
-        index_min = min(range(len([elt.postal_code for elt in cities])), key=[elt.postal_code for elt in cities].__getitem__)
-        cities_to_return.append(cities[index_min].to_dict())
+    for cities in cities_with_common_coordinates.values():
+        cities_to_return.append(cities[0].to_dict())
 
-    return cities_to_return
+    return cities_to_return[:5]
 
 def normalize(city_input: str) -> str:
     res = city_input.replace("-", "")
@@ -49,7 +68,8 @@ def find_city(city_input) -> list[pd.core.series.Series] :
 
 def find_dep_and_region(code: str) -> dict:
     index = bisect.bisect_left(FRENCH_DEPS_DF.loc[:,'code'], code)
-    if not (index and FRENCH_DEPS_DF.loc[index, 'code'] == code):
+
+    if not FRENCH_DEPS_DF.loc[index, 'code'] == code:
         return False
 
     return {
