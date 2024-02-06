@@ -29,7 +29,7 @@ async def get_city(city: str):
     try:
         result = utils.find_city(city)
     except Exception as exc:
-        logger.error(f'failed to read csvs to find city: {traceback.format_exc()}')
+        logger.error('failed to read csvs to find city: %s', traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to find city') from exc
 
     if len(result) == 0:
