@@ -8,27 +8,70 @@ class GetUserRM(BaseModel):
     firstname: str
     lastname: str
 
-class ContractualIdentity(BaseModel):
-    type: str
-    gender: str
-    postal_address: str
-    birthdate: str
-    birthplace: str
-    citizenship: str
-    company_name: str = None
-    company_status: str = None
-    capital: float = None
-    head_office_address: str = None
-    siret: str = None
+class PutLegalIdentityResponse(BaseModel):
+    message: str
+    new_level: int
 
-class BankIdentity(BaseModel):
-    bank_identity_file_status: str
-    bank_identity_file: str
-    bank_domiciliation_country: str = ""
-    account_holder: str = ""
-    bank: str = ""
-    iban: str = ""
-    bic_or_swift: str = ""
+class PutLegalIdentityQuery(BaseModel):
+    business_type: str
+    company_structure: str = None
+    company_name: str = None
+    capital: str = None
+    rcs: str = None
+    siren: str = None
+    head_office_address_line1: str = None
+    head_office_address_line2: str = None
+    head_office_address_postal_code: str = None
+    head_office_address_city: str = None
+    gender: str = None
+    role_in_company: str = None
+    birthdate: str = None
+    birthplace: str = None
+    citizenship: str = None
+    address_line1: str = None
+    address_line2: str = None
+    address_postal_code: str = None
+    address_city: str = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def validate_atts(cls, values):
+        if values.get("business_type") not in ["individual", "company"]:
+            raise HTTPException(status_code=422, detail='business_type has to be either "individual" or "company"')
+
+        if values.get("gender") is not None and values.get("gender") not in ["Monsieur", "Madame"]:
+            raise HTTPException(status_code=422, detail='gender has to be either "Monsieur" or "Madame"')
+
+        if values.get("birthdate") is not None:
+            try:
+                datetime.strptime(values.get("birthdate"), "%d/%m/%Y")
+            except Exception as exc:
+                raise HTTPException(status_code=422, detail="incorrect birthdate date format") from exc
+
+        return values
+
+class LegalIdentity(BaseModel):
+    level: int
+    business_type: str
+    gender: str = None
+    company_structure: str = None
+    company_name: str = None
+    capital: str = None
+    rcs: str = None
+    siren: str = None
+    head_office_address_line1: str = None
+    head_office_address_line2: str = None
+    head_office_address_postal_code: str = None
+    head_office_address_city: str = None
+    role_in_company: str = None
+    birthdate: str = None
+    birthplace: str = None
+    citizenship: str = None
+    address_line1: str = None
+    address_line2: str = None
+    address_postal_code: str = None
+    address_city: str = None
+    iban_last4: str = None
 
 class GetAccountInformation(BaseModel):
     user_id: str
@@ -36,41 +79,7 @@ class GetAccountInformation(BaseModel):
     lastname: str
     email: str
     phone_number: str
-    contractual_identity: ContractualIdentity = None
-    bank_identity: BankIdentity = None
-
-class PutContractualIdentityQuery(BaseModel):
-    type: str
-    company_name: str = None
-    company_status: str = None
-    capital: float = None
-    head_office_address: str = None
-    siret: str = None
-    gender: str
-    postal_address: str
-    birthdate: str
-    birthplace: str
-    citizenship: str
-
-    @model_validator(mode='before')
-    @classmethod
-    def validate_atts(cls, values):
-        # fields presence
-        if values.get("type") == "company":
-            for field in ["company_name", "company_status", "capital", "head_office_address", "siret"]:
-                if values.get(field) is None:
-                    raise HTTPException(status_code=422, detail="missing mandatory fields")
-
-        elif values.get("type") != "individual":
-            raise HTTPException(status_code=422, detail="type has to be either 'individual' or 'company'")
-
-        # fields content
-        try:
-            datetime.strptime(values.get("birthdate"), "%d/%m/%Y")
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail="incorrect birth_date date format") from exc
-
-        return values
+    legal_identity: LegalIdentity = None
 
 class Review(BaseModel):
     stallion_name: str

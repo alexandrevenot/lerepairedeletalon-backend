@@ -3,15 +3,15 @@ import logging.handlers
 import traceback
 import math
 from datetime import datetime
-from typing import Annotated
-import uuid
+
 from bson.objectid import ObjectId
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
 from pymongo.errors import PyMongoError
 
 import app.users.utils as utils
 import app.users.schemas as schemas
+import app.payments.utils as payments_utils
 
 from app.dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
 
@@ -53,9 +53,9 @@ async def get_user(current_user = Depends(get_current_user)):
 @router.get('/account-information', response_model=schemas.GetAccountInformation)
 async def get_account_information(current_user = Depends(get_current_user)):
     try:
-        contractual_identity = schemas.ContractualIdentity(**current_user['contractual_identity'])
+        legal_identity = schemas.LegalIdentity(**current_user['legal_identity'])
     except KeyError:
-        contractual_identity = None
+        legal_identity = None
 
     kwargs = {}
     for field in ["firstname", "lastname", "email", "phone_number"]:
@@ -63,36 +63,75 @@ async def get_account_information(current_user = Depends(get_current_user)):
 
     kwargs["user_id"] = str(current_user["_id"])
 
-    try:
-        bank_identity = schemas.BankIdentity(**current_user['bank_identity'])
-    except KeyError:
-        bank_identity = None
-
-    if contractual_identity is not None:
-        kwargs["contractual_identity"] = contractual_identity
-
-    if bank_identity is not None:
-        kwargs["bank_identity"] = bank_identity
+    if legal_identity is not None:
+        kwargs["legal_identity"] = legal_identity
 
     return schemas.GetAccountInformation(**kwargs)
 
-@router.put('/contractual-identity')
-async def put_contractual_identity(query: schemas.PutContractualIdentityQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
+@router.put('/legal-identity', response_model=schemas.PutLegalIdentityResponse)
+async def put_legal_identity(query: schemas.PutLegalIdentityQuery, current_user = Depends(get_current_user), db = Depends(get_db)):
+    try:
+        current_level = current_user["legal_identity"]["level"]
+    except KeyError:
+        current_level = 0
+
+    try:
+        legal_identity = current_user["legal_identity"]
+    except KeyError:
+        legal_identity = {}
+
+    if current_level >= 3 and "business_type" in legal_identity \
+    and legal_identity["business_type"] != query.business_type:
+        raise HTTPException(status_code=403, detail="cannot change business type once level 3 is reached")
+
+    legal_identity_new_fields = {}
+    new_level = 0
+    if query.business_type == "company":
+        for field in ["company_structure", "company_name", "capital", "rcs",
+                      "siren", "head_office_address_line1", "head_office_address_line2",
+                      "head_office_address_postal_code", "head_office_address_city",
+                      "gender", "role_in_company", "birthdate", "address_line1",
+                      "address_line2", "address_postal_code", "address_city"]:
+            value = getattr(query, field)
+            if value is not None:
+                legal_identity_new_fields[field] = value
+
+        legal_identity.update(legal_identity_new_fields)
+
+        if all(legal_identity.get(field, None) is not None for field in ["company_structure", "company_name", "capital", "siren",
+                                                              "head_office_address_line1", "head_office_address_postal_code",
+                                                              "head_office_address_city", "gender", "role_in_company"]):
+            new_level = 1
+            if all(legal_identity.get(field, None) is not None for field in ["birthdate", "address_line1", "address_city",
+                                                                             "address_postal_code"]):
+                new_level = 2
+                if "stripe_account" in current_user:
+                    new_level = 3
+
+    elif query.business_type == "individual":
+        for field in ["gender", "birthdate", "birthplace", "citizenship", "address_line1",
+                      "address_line2", "address_postal_code", "address_city"]:
+            value = getattr(query, field)
+            if value is not None:
+                legal_identity_new_fields[field] = value
+
+        legal_identity.update(legal_identity_new_fields)
+
+        if all(legal_identity.get(field, None) is not None for field in ["gender", "birthdate", "birthplace", "citizenship",
+                                                                         "address_line1", "address_postal_code", "address_city"]):
+            new_level = 2
+            if "stripe_account" in current_user:
+                new_level = 3
+
     update = {
-            '$set': {
-                'contractual_identity': {
-                }
-            }
+        '$set': {
+            'legal_identity.business_type': query.business_type,
+            'legal_identity.level': new_level
         }
+    }
 
-    if query.type == 'company':
-        for field in ['type','company_name', 'company_status', 'capital', 'head_office_address', 'siret']:
-            update['$set']['contractual_identity'][field] = getattr(query, field)
-    else:
-        update['$set']['contractual_identity']['type'] = query.type
-
-    for field in ['gender', 'postal_address', 'birthdate', 'birthplace', 'citizenship']:
-        update['$set']['contractual_identity'][field] = getattr(query, field)
+    for field, value in legal_identity_new_fields.items():
+        update["$set"][f"legal_identity.{field}"] = value
 
     try:
         db.users.update_one({'_id': current_user['_id']}, update)
@@ -100,7 +139,10 @@ async def put_contractual_identity(query: schemas.PutContractualIdentityQuery, c
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to write db') from exc
 
-    return {'message': 'successfully put profile information'}
+    return schemas.PutLegalIdentityResponse(
+        message='successfully put legal identity',
+        new_level=new_level
+    )
 
 @router.get('/reviews/{user_id}', response_model=schemas.Reviews)
 async def get_user_reviews(
@@ -355,57 +397,6 @@ async def get_user_score(
         nb_reviews=nb_reviews
     )
 
-@router.put('/bank-identity')
-async def put_bank_identity(
-    bank_identity_file: Annotated[UploadFile, File()],
-    current_user = Depends(get_current_user),
-    db = Depends(get_db),
-    admin_files_bucket = Depends(get_admin_files_bucket),
-    db_client = Depends(get_db_client)
-):
-    try:
-        bank_identity_file_status = current_user['bank_identity']['bank_identity_file_status']
-    except KeyError:
-        bank_identity_file_status = None
-
-    if bank_identity_file.content_type not in config['allowed_bank_identity_file_content_types']:
-        raise HTTPException(status_code=422, detail="file type not allowed")
-
-    bank_identity_file_blob_name = str(uuid.uuid4()) + '.' + bank_identity_file.content_type.split('/')[1]
-    bank_identity_file_blob = admin_files_bucket.blob(bank_identity_file_blob_name)
-    bank_identity_file_blob.content_type = bank_identity_file.content_type
-
-    with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.users.update_one(
-                    {"_id": current_user["_id"]},
-                    {
-                        "$set": {
-                            "bank_identity.bank_identity_file": bank_identity_file_blob_name,
-                            "bank_identity.bank_identity_file_status": "to_be_validated"
-                        }
-                    }
-                )
-
-                if bank_identity_file_status is not None:
-                    old_bank_identity_file_blob = admin_files_bucket.blob(current_user['bank_identity']["bank_identity_file"])
-
-                bank_identity_file_blob.upload_from_file(bank_identity_file.file, rewind=True)
-
-                if bank_identity_file_status is not None:
-                    old_bank_identity_file_blob.delete()
-
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
-
-            except Exception as exc:
-                logger.error("failed to write object storage: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
-
-    return {"message": "successfully added bank_identity_file"}
-
 @router.get('/cover-notifications')
 async def get_cover_notifications(current_user = Depends(get_current_user)):
     try:
@@ -453,6 +444,14 @@ async def delete_account(
     with db_client.start_session() as session:
         with session.start_transaction():
             try:
+                try:
+                    stripe_accound_id = current_user["stripe_account"]["account"]["id"]
+                except KeyError:
+                    stripe_accound_id = None
+
+                if stripe_accound_id is not None:
+                    payments_utils.delete_stripe_account(stripe_accound_id)
+
                 db.password_update_codes.delete_many({
                     "email": current_user["email"]
                 })
@@ -496,3 +495,10 @@ async def delete_account(
                 raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully deleted account"}
+
+@router.get('/test-date-format')
+async def test_date_format(date: str):
+    try:
+        datetime.strptime(date, "%d/%m/%Y")
+    except Exception as exc:
+        raise HTTPException(status_code=422) from exc

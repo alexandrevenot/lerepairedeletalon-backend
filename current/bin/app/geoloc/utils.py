@@ -27,18 +27,20 @@ FRENCH_DEPS_DF = pd.read_csv(
     }
 )
 
+CITIES_DF_LENGTH = len(NORMALIZED_DF.index)
+
 def find_city_not_normalized(city: str) -> list[pd.core.series.Series]:
     characters_nb = len(city)
     unfiltered_cities = []
     index = bisect.bisect_left(NORMALIZED_DF.loc[:,'city'], city, key=lambda x: x[:characters_nb])
 
-    if not NORMALIZED_DF.loc[index, 'city'][:characters_nb] == city:
+    if index == CITIES_DF_LENGTH or not NORMALIZED_DF.loc[index, 'city'][:characters_nb] == city:
         return []
 
     unfiltered_cities.append(COMPLETE_DF.loc[index,:])
     index += 1
 
-    while NORMALIZED_DF.loc[index, 'city'][:characters_nb] == city:
+    while index < CITIES_DF_LENGTH and NORMALIZED_DF.loc[index, 'city'][:characters_nb] == city:
         unfiltered_cities.append(COMPLETE_DF.loc[index,:])
         index += 1
 
