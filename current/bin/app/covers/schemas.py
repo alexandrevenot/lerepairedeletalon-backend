@@ -65,7 +65,7 @@ class GetCoverInformation(BaseModel):
     cover_specs: Any
     arrival_date: str
     status: str
-    price: int
+    price: float
     base_price: int
     buyer_message: str
     timestamps: list[dict]

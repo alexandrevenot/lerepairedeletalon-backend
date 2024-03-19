@@ -10,10 +10,10 @@ from pymongo.errors import PyMongoError
 
 import app.contracts.utils as utils
 import app.contracts.schemas as schemas
-import app.covers.router as covers_router
+import app.covers.utils as covers_utils
 import app.users.utils as users_utils
 
-from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter, get_db_client, get_current_user_id
+from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter, get_db_client, get_current_user_id, CoverInDBGetter
 
 # configs
 global_config = utils.load_global_config()
@@ -35,6 +35,7 @@ logger.info('Logger initialized')
 
 # dependencies
 get_current_user = CurrentUserGetter(logger)
+get_cover_in_db = CoverInDBGetter(logger)
 
 # routes
 router = APIRouter(prefix='/contracts')
@@ -70,7 +71,7 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
 
     with db_client.start_session() as session:
         with session.start_transaction():
-            await covers_router.step_forward_cover(cover_in_db, "signingstarted", db)
+            await covers_utils.step_forward_cover(cover_in_db, "signingstarted", db, logger)
 
             try:
                 assert returned_json["data"]["contract"]["signers"][0]["email"] == buyer_in_db["email"]
@@ -98,7 +99,7 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
 
 @router.get('/sign-page-url/{cover_id}')
 async def get_sign_page_url(
-    cover_in_db = Depends(covers_router.get_cover_in_db),
+    cover_in_db = Depends(get_cover_in_db),
     user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     db_client = Depends(get_db_client)
@@ -154,10 +155,10 @@ async def manage_esignatures_wehbooks(
         raise HTTPException(status_code=500, detail="cover not found")
 
     if cover_in_db["status"] == "signingstarted" and signing_order == "1":
-        await covers_router.step_forward_cover(cover_in_db, "buyersigned", db)
+        await covers_utils.step_forward_cover(cover_in_db, "buyersigned", db, logger)
         background_tasks.add_task(users_utils.notify_user, "buyersigned", cover_in_db["_id"], "seller", cover_in_db["seller_id"], db, logger)
     elif cover_in_db["status"] == "buyersigned" and signing_order == "2":
-        await covers_router.step_forward_cover(cover_in_db, "sellersigned", db)
+        await covers_utils.step_forward_cover(cover_in_db, "sellersigned", db, logger)
         background_tasks.add_task(users_utils.notify_user, "sellersigned", cover_in_db["_id"], "buyer", cover_in_db["buyer_id"], db, logger)
 
     return {"message": "successfully received webhook"}

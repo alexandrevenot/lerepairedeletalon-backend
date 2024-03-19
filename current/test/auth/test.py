@@ -1,16 +1,10 @@
 import unittest
 import os
-import sys
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-
 from context import fake_db, get_db, get_db_client, SMTPDummySession
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
-
 import app.auth.router as auth_router
 
 server = FastAPI()

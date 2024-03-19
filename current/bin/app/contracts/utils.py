@@ -1,10 +1,10 @@
 import yaml
 import aiohttp
 
-import app.pricing.utils as pricing_utils
+import app.payments.utils as payments_utils
 import app.stallions.utils as stallions_utils
 
-pricing_config = pricing_utils.load_config()
+payments_config = payments_utils.load_config()
 stallions_config = stallions_utils.load_config()
 
 def load_global_config() -> dict:
@@ -192,25 +192,25 @@ async def create_and_send_contract(
         "value": ", ".join(cover_document["stallion_production_breeds"])
     })
 
-    advance = pricing_utils.calculate_checkout(
-        pricing_utils.calculate_advance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"], False),
-        pricing_utils.calculate_advance(cover_document["buyer_fees_ht"], cover_document["cover_specs"]["advance_percentage"], False),
-        pricing_config["TVA_coeff_HT"],
-        pricing_config["TVA_cover_coeff_HT"]
+    advance = payments_utils.calculate_checkout(
+        payments_utils.calculate_advance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"]),
+        payments_utils.calculate_advance(cover_document["fees_ht"], cover_document["cover_specs"]["advance_percentage"]),
+        payments_config["TVA_coeff_HT"],
+        payments_config["TVA_cover_coeff_HT"]
     ).total
 
-    balance = pricing_utils.calculate_checkout(
-        pricing_utils.calculate_balance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"], False),
-        pricing_utils.calculate_balance(cover_document["buyer_fees_ht"], cover_document["cover_specs"]["advance_percentage"], False),
-        pricing_config["TVA_coeff_HT"],
-        pricing_config["TVA_cover_coeff_HT"]
+    balance = payments_utils.calculate_checkout(
+        payments_utils.calculate_balance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"]),
+        payments_utils.calculate_balance(cover_document["fees_ht"], cover_document["cover_specs"]["advance_percentage"]),
+        payments_config["TVA_coeff_HT"],
+        payments_config["TVA_cover_coeff_HT"]
     ).total
 
     placeholder_fields.append({
         "api_key": "down_payment",
         "value": advance
     })
-    
+
     placeholder_fields.append({
         "api_key": "last_payment",
         "value": balance

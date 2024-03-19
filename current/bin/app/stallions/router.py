@@ -11,14 +11,14 @@ from pymongo.errors import PyMongoError
 import app.stallions.utils as utils
 import app.stallions.schemas as schemas
 import app.geoloc.utils as geoloc_utils
-import app.pricing.utils as pricing_utils
+import app.payments.utils as payments_utils
 
 from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client, BucketGetter, get_current_user_id
 
 # configs
 global_config = utils.load_global_config()
 config = utils.load_config()
-pricing_config = pricing_utils.load_config()
+payments_config = payments_utils.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -78,23 +78,23 @@ async def search(
     # price
     price_query = {}
     if min_price is not None:
-        min_price = pricing_utils.calculate_corresponding_subtotal(
+        min_price = payments_utils.calculate_corresponding_subtotal(
             min_price,
-            pricing_config['buyer_fees_coeff'],
-            pricing_config['buyer_fees_offset'],
-            pricing_config['TVA_coeff_HT'],
-            pricing_config['TVA_cover_coeff_HT'],
-            "min")
+            payments_config['fees_coeff'],
+            payments_config['fees_offset'],
+            payments_config['TVA_coeff_HT'],
+            payments_config['TVA_cover_coeff_HT']
+        )
         price_query["$gte"] = min_price
 
     if max_price is not None:
-        max_price = pricing_utils.calculate_corresponding_subtotal(
+        max_price = payments_utils.calculate_corresponding_subtotal(
             max_price,
-            pricing_config['buyer_fees_coeff'],
-            pricing_config['buyer_fees_offset'],
-            pricing_config['TVA_coeff_HT'],
-            pricing_config['TVA_cover_coeff_HT'],
-            "max")
+            payments_config['fees_coeff'],
+            payments_config['fees_offset'],
+            payments_config['TVA_coeff_HT'],
+            payments_config['TVA_cover_coeff_HT']
+        )
         price_query["$lte"] = max_price
 
     if price_query:

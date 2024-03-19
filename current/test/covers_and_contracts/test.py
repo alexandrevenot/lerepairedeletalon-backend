@@ -11,25 +11,20 @@ from fastapi import FastAPI
 from bson.objectid import ObjectId
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-
 from context import fake_db, get_db, get_db_client, SMTPDummySession
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
-
 import app.auth.router as auth_router
 import app.stallions.router as stallions_router
 import app.stallions.utils as stallions_utils
 import app.covers.router as covers_router
 import app.covers.utils as covers_utils
-import app.pricing.router as pricing_router
-import app.pricing.utils as pricing_utils
+import app.payments.router as payments_router
+import app.payments.utils as payments_utils
 import app.contracts.router as contracts_router
 import app.contracts.utils as contracts_utils
 import app.users.router as users_router
 
 stallions_config = stallions_utils.load_config()
-pricing_config = pricing_utils.load_config()
+payments_config = payments_utils.load_config()
 config = covers_utils.load_config()
 contracts_config = contracts_utils.load_config()
 
@@ -55,7 +50,7 @@ server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
 server.include_router(covers_router.router)
 server.include_router(contracts_router.router)
-server.include_router(pricing_router.router)
+server.include_router(payments_router.router)
 server.include_router(users_router.router)
 
 client = TestClient(server)
@@ -340,8 +335,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         for timestamp in cover_in_db["timestamps"]["timestamps_list"][1:]:
             self.assertIsNone(timestamp["timestamp"])
         self.assertEqual(cover_in_db["subtotal_ht"], 750)
-        self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
-        self.assertEqual(cover_in_db["buyer_fees_ht"], 45)
+        self.assertEqual(cover_in_db["fees_ht"], 45)
         self.assertEqual(cover_in_db["cover_specs"]["advance_percentage"], 40)
         self.assertEqual(cover_in_db["notes"], {
             "seller": "",
@@ -355,7 +349,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=buyer', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 1)
-        self.assertEqual(response.json()["items"][0]["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) + math.ceil(45*1.2))
+        self.assertEqual(response.json()["items"][0]["price"], round(750 * (1 + payments_config["TVA_cover_coeff_HT"]), 2) + round(45*1.2, 2))
 
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=buyer', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
@@ -368,7 +362,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         response = client.get('/covers/cover-group?group=pendingApproval&point_of_view=seller', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 1)
-        self.assertEqual(response.json()["items"][0]["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) - math.ceil(45*1.2))
+        self.assertEqual(response.json()["items"][0]["price"], round(750 * (1 + payments_config["TVA_cover_coeff_HT"]), 2))
 
         # add another stallion + cover to check sorting on dates
         post_stallion_body["final_fields_body"]["n_sire"] = "591784564X"
@@ -450,7 +444,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["mare_nsire"], "64853156156X")
         self.assertEqual(cover_information_json["cover_type"], "lib")
         self.assertEqual(cover_information_json["status"], "requested")
-        self.assertEqual(cover_information_json["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) + math.ceil(45*1.2))
+        self.assertEqual(cover_information_json["price"], round(750 * (1 + payments_config["TVA_cover_coeff_HT"]), 2) + round(45*1.2, 2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
         self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
@@ -473,7 +467,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_information_json["mare_nsire"], "64853156156X")
         self.assertEqual(cover_information_json["cover_type"], "lib")
         self.assertEqual(cover_information_json["status"], "requested")
-        self.assertEqual(cover_information_json["price"], math.ceil(750 * (1 + pricing_config["TVA_cover_coeff_HT"])) - math.ceil(45*1.2))
+        self.assertEqual(cover_information_json["price"], round(750 * (1 + payments_config["TVA_cover_coeff_HT"]), 2))
         self.assertEqual(cover_information_json["buyer_message"], "Yo")
         self.assertEqual(cover_information_json["timestamps"][0]["timestamp"][:2], "Le")
         self.assertEqual(cover_information_json["notes"], "")
@@ -514,7 +508,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         response = client.get(f'/covers/cover/{cover_id}', headers=owner_headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["price"], math.ceil(300*(1+pricing_config["TVA_cover_coeff_HT"])) - math.ceil(0.06 * 300 * 1.2))
+        self.assertEqual(response.json()["price"], round(300*(1+payments_config["TVA_cover_coeff_HT"]), 2))
 
         response = client.put(f'/covers/cover/{cover_id}', json={"arrival_date": "30/03/2024"}, headers=owner_headers)
         self.assertEqual(response.status_code, 200)
@@ -637,7 +631,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cover_in_db["status"], "signingstarted")
 
         # test contracts building
-
         # put contracts identity for seller
         body = {
             "type": "company",
@@ -692,10 +685,10 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         for elt in sent_body["placeholder_fields"]:
             placeholders[elt["api_key"]] = elt["value"]
         
-        self.assertEqual(placeholders["down_payment"], math.ceil(1.055 * pricing_utils.calculate_advance(cover_in_db["subtotal_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)) \
-            + math.ceil(1.2 * pricing_utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)))
-        self.assertEqual(placeholders["last_payment"], math.ceil(1.055 * pricing_utils.calculate_balance(cover_in_db["subtotal_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)) \
-            + math.ceil(1.2 * pricing_utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"], False)))
+        self.assertEqual(placeholders["down_payment"], round(1.055 * payments_utils.calculate_advance(cover_in_db["subtotal_ht"], cover_in_db["cover_specs"]["advance_percentage"]), 2) \
+            + round(1.2 * payments_utils.calculate_advance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"]), 2))
+        self.assertEqual(placeholders["last_payment"], round(1.055 * payments_utils.calculate_balance(cover_in_db["subtotal_ht"], cover_in_db["cover_specs"]["advance_percentage"]), 2) \
+            + round(1.2 * payments_utils.calculate_balance(cover_in_db["buyer_fees_ht"], cover_in_db["cover_specs"]["advance_percentage"]), 2))
 
         # testing webhooks
 
@@ -795,7 +788,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cover_in_db["status"], "buyersigned")
 
         # check that checkout cannot be get because the contract is not sellersigned
-        response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
+        response = client.get(f'/payments/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 403)
 
         # check that cover is indeed forwarded when its signing_order == "2"
@@ -819,19 +812,19 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # checkout tests
         # when the cover id is not readable
-        response = client.get('/pricing/checkout/oungabounga', headers=headers)
+        response = client.get('/payments/checkout/oungabounga', headers=headers)
         self.assertEqual(response.status_code, 422)
 
         # when the cover id is wrong
-        response = client.get(f'/pricing/checkout/{wrong_cover_id}', headers=headers)
+        response = client.get(f'/payments/checkout/{wrong_cover_id}', headers=headers)
         self.assertEqual(response.status_code, 404)
 
         # when the access token is not the buyers one
-        response = client.get(f'/pricing/checkout/{cover_id}', headers=owner_headers)
+        response = client.get(f'/payments/checkout/{cover_id}', headers=owner_headers)
         self.assertEqual(response.status_code, 403)
 
         # when ok
-        response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
+        response = client.get(f'/payments/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["subtotal"], 317)
         self.assertEqual(response.json()["service_fees"], 22)
@@ -904,7 +897,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
 
         # balance checkout
-        response = client.get(f'/pricing/checkout/{cover_id}', headers=headers)
+        response = client.get(f'/payments/checkout/{cover_id}', headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["subtotal"], 475)
         self.assertEqual(response.json()["service_fees"], 33)

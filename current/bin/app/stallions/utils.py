@@ -5,9 +5,9 @@ import yaml
 from dateutil.relativedelta import relativedelta
 from PIL import Image
 
-import app.pricing.utils as pricing_utils
+import app.payments.utils as payments_utils
 
-pricing_config = pricing_utils.load_config()
+payments_config = payments_utils.load_config()
 
 def load_global_config() -> dict:
     with open('/lerepairedeletalon/server/current/etc/config.yaml', 'r') as f:
@@ -27,17 +27,17 @@ def get_displayed_price(document: dict, min_price: float, max_price: float, cove
         count += 1
 
     if count == 0:
-        value = min([value["price"] for key, value in document["cover_specs"].items() if key in cover_types])
+        value = min(value["price"] for key, value in document["cover_specs"].items() if key in cover_types)
     elif count == 1:
         if min_price is not None:
-            value = min([value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and key in cover_types])
+            value = min(value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and key in cover_types)
         else:
-            value = min([value["price"] for key, value in document["cover_specs"].items() if value["price"] <= max_price and key in cover_types])
+            value = min(value["price"] for key, value in document["cover_specs"].items() if value["price"] <= max_price and key in cover_types)
     else:
-        value = min([value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and value["price"] <= max_price and key in cover_types])
+        value = min(value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and value["price"] <= max_price and key in cover_types)
 
-    buyer_fees_ht = pricing_utils.calculate_fees_ht(value, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset'])
-    return pricing_utils.calculate_checkout(value, buyer_fees_ht, pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total
+    fees_ht = payments_utils.calculate_fees_ht(value, payments_config['fees_coeff'], payments_config['fees_offset'])
+    return payments_utils.calculate_checkout(value, fees_ht, payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total
 
 def calculate_age(birthdate: datetime) -> int:
     today = date.today()

@@ -9,7 +9,7 @@ from pymongo.errors import PyMongoError
 
 import app.covers.utils as utils
 import app.covers.schemas as schemas
-import app.pricing.utils as pricing_utils
+import app.payments.utils as payments_utils
 import app.contracts.utils as contracts_utils
 import app.stallions.utils as stallions_utils
 import app.users.utils as users_utils
@@ -19,7 +19,7 @@ from app.dependencies import get_db, get_user_from_object_id, CurrentUserGetter,
 # configs
 global_config = utils.load_global_config()
 config = utils.load_config()
-pricing_config = pricing_utils.load_config()
+payments_config = payments_utils.load_config()
 contracts_config = contracts_utils.load_config()
 stallions_config = stallions_utils.load_config()
 
@@ -125,12 +125,10 @@ async def create_cover(
         "timestamps_list": [{"status": step, "timestamp": datetime.now() if step == config["status"][0] else None} for step in config["status"][:-1]]
     }
 
-    cover_payment_details = pricing_utils.get_cover_payment_details(
+    cover_payment_details = payments_utils.get_cover_payment_details(
         stallion_in_db["cover_specs"][cover.cover_type]["price"],
-        pricing_config["buyer_fees_coeff"],
-        pricing_config["buyer_fees_offset"],
-        pricing_config["seller_fees_coeff"],
-        pricing_config["seller_fees_offset"]
+        payments_config["fees_coeff"],
+        payments_config["fees_offset"]
     )
 
     ## insert payment details
@@ -172,28 +170,6 @@ async def create_cover(
 
     return {"message": "cover registered successfully"}
 
-async def step_forward_cover(cover_in_db: dict, next_status: str, db = Depends(get_db)):
-    cursor_index = cover_in_db["timestamps"]["cursor_index"]
-    timestamps_list = cover_in_db["timestamps"]["timestamps_list"]
-
-    if timestamps_list[cursor_index]["status"] != next_status:
-        timestamps_list.insert(cursor_index, {"status": next_status, "timestamp": datetime.now()})
-    else:
-        timestamps_list[cursor_index]["timestamp"] = datetime.now()
-
-    try:
-        update = {
-            '$set': {
-                'status': next_status,
-                'timestamps' + '.' + 'cursor_index': cursor_index + 1,
-                'timestamps' + '.' + 'timestamps_list': timestamps_list
-                }
-            }
-        db.covers.update_one({"_id": cover_in_db["_id"]}, update)
-    except PyMongoError as exc:
-        logger.error("failed to write db: %s", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="failed to write db") from exc
-
 @router.post('/step-forward-cover/{cover_id}')
 async def manually_step_forward_cover(
     query: schemas.ManuallyStepForwardCoverQuery,
@@ -217,7 +193,7 @@ async def manually_step_forward_cover(
     and "arrival_date" not in cover_in_db:
         raise HTTPException(status_code=409, detail="an arrival date has to be provided")
 
-    await step_forward_cover(cover_in_db, query.next_status, db)
+    await utils.step_forward_cover(cover_in_db, query.next_status, db, logger)
 
     destination_pov = "seller" if pov == "buyer" else "buyer"
     background_tasks.add_task(
@@ -260,12 +236,10 @@ async def edit_cover(
         updated_fields["arrival_date"] = arrival_date
 
     if query.new_subtotal is not None:
-        cover_payment_details = pricing_utils.get_cover_payment_details(
+        cover_payment_details = payments_utils.get_cover_payment_details(
             query.new_subtotal,
-            pricing_config["buyer_fees_coeff"],
-            pricing_config["buyer_fees_offset"],
-            pricing_config["seller_fees_coeff"],
-            pricing_config["seller_fees_offset"]
+            payments_config["fees_coeff"],
+            payments_config["fees_offset"]
         )
 
         updated_fields.update(cover_payment_details.model_dump())
@@ -309,8 +283,7 @@ async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_
                 "$project": {
                     "timestamps": 1,
                     "subtotal_ht": 1,
-                    "buyer_fees_ht": 1,
-                    "seller_fees_ht": 1,
+                    "fees_ht": 1,
                     "_id": 1,
                     "stallion_name": 1,
                     "mare_name": 1,
@@ -327,8 +300,7 @@ async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_
                         "$max": "$timestamps.timestamps_list.timestamp"
                     },
                     "subtotal_ht": {"$first": "$subtotal_ht"},
-                    "buyer_fees_ht": {"$first": "$buyer_fees_ht"},
-                    "seller_fees_ht": {"$first": "$seller_fees_ht"},
+                    "fees_ht": {"$first": "$fees_ht"},
                     "stallion_name": {"$first": "$stallion_name"},
                     "mare_name": {"$first": "$mare_name"},
                     "status": {"$first": "$status"},
@@ -349,19 +321,17 @@ async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_
     cover_items = []
     for document in cursor:
         if point_of_view == "seller":
-            price = pricing_utils.calculate_income(
+            price = payments_utils.calculate_income(
                 document["subtotal_ht"],
-                document["seller_fees_ht"],
-                pricing_config["TVA_coeff_HT"],
-                pricing_config["TVA_cover_coeff_HT"]
-                ).total
+                payments_config["TVA_cover_coeff_HT"]
+            )
         else:
-            price = pricing_utils.calculate_checkout(
+            price = payments_utils.calculate_checkout(
                 document["subtotal_ht"],
-                document["buyer_fees_ht"],
-                pricing_config["TVA_coeff_HT"],
-                pricing_config["TVA_cover_coeff_HT"]
-                ).total
+                document["fees_ht"],
+                payments_config["TVA_coeff_HT"],
+                payments_config["TVA_cover_coeff_HT"]
+            ).total
 
         cover_items.append({
             "id": str(document["_id"]),
@@ -394,19 +364,17 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), user_id 
 
     # price
     if pov == "seller":
-        price = pricing_utils.calculate_income(
+        price = payments_utils.calculate_income(
             cover_in_db["subtotal_ht"],
-            cover_in_db["seller_fees_ht"],
-            pricing_config["TVA_coeff_HT"],
-            pricing_config["TVA_cover_coeff_HT"]
-            ).total
+            payments_config["TVA_cover_coeff_HT"]
+        )
     else:
-        price = pricing_utils.calculate_checkout(
+        price = payments_utils.calculate_checkout(
             cover_in_db["subtotal_ht"],
-            cover_in_db["buyer_fees_ht"],
-            pricing_config["TVA_coeff_HT"],
-            pricing_config["TVA_cover_coeff_HT"]
-            ).total
+            cover_in_db["fees_ht"],
+            payments_config["TVA_coeff_HT"],
+            payments_config["TVA_cover_coeff_HT"]
+        ).total
 
     # timestamps
     timestamps_list = cover_in_db["timestamps"]["timestamps_list"]
@@ -469,13 +437,3 @@ async def update_cover_notes(query: schemas.UpdateNotesQuery, cover_in_db = Depe
         raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "updated notes successfully"}
-
-@router.post("/step-forward-payment/{cover_id}")
-async def step_forward_payment(cover_in_db = Depends(get_cover_in_db), db = Depends(get_db)):
-    if cover_in_db["status"] == "sellersigned":
-        await step_forward_cover(cover_in_db, "downpaid", db)
-    elif cover_in_db["status"] == "downpaid":
-        await step_forward_cover(cover_in_db, "fullypaid", db)
-    else:
-        raise HTTPException(status_code=403)
-    return {"message": "successfully step-forwarded payment"}
