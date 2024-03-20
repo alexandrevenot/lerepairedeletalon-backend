@@ -8,8 +8,10 @@ from pymongo.errors import PyMongoError
 
 import app.payments.schemas as schemas
 import app.payments.utils as utils
+import app.covers.utils as covers_utils
+import app.users.utils as users_utils
 
-from app.dependencies import CurrentUserGetter, get_db
+from app.dependencies import CurrentUserGetter, get_db, CoverInDBGetter, get_user_from_object_id
 
 # configs
 global_config = utils.load_global_config()
@@ -31,10 +33,12 @@ logger.info('Logger initialized')
 
 # stripe
 stripe.api_key = config["api_key"]
-endpoint_secret = config["endpoint_secret"]
+accounts_endpoint_secret = config["accounts_endpoint_secret"]
+checkout_endpoint_secret = config["checkout_endpoint_secret"]
 
 # dependencies
 get_current_user = CurrentUserGetter(logger)
+get_cover_in_db = CoverInDBGetter(logger)
 
 # routes
 router = APIRouter(prefix='/payments')
@@ -238,7 +242,7 @@ async def handle_stripe_accounts_webhook(request: Request, db = Depends(get_db))
 
     try:
         event = stripe.Webhook.construct_event(
-            payload=data, sig_header=stripe_signature, secret=endpoint_secret
+            payload=data, sig_header=stripe_signature, secret=accounts_endpoint_secret
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail='invalid payload') from exc
@@ -277,5 +281,172 @@ async def handle_stripe_accounts_webhook(request: Request, db = Depends(get_db))
     except PyMongoError as exc:
         logger.error("failed to read db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail='failed to read db') from exc
+
+    return {"message": "successfully received webhook"}
+
+@router.get('/checkout-simulation', response_model=schemas.PriceWithFees)
+async def get_checkout_simulation(subtotal: int):
+    fees_ht = utils.calculate_fees_ht(
+        subtotal,
+        config['fees_coeff'],
+        config['fees_offset']
+    )
+    return utils.calculate_checkout(
+        subtotal,
+        fees_ht,
+        config["TVA_coeff_HT"],
+        config["TVA_cover_coeff_HT"]
+    )
+
+@router.get('/create-checkout-session/{cover_id}', response_model=schemas.Checkout)
+async def get_checkout(
+    current_user = Depends(get_current_user),
+    cover_in_db = Depends(get_cover_in_db),
+    db = Depends(get_db)
+):
+    if current_user["_id"] != cover_in_db["buyer_id"]:
+        raise HTTPException(status_code=403, detail="only buyer can get checkout")
+
+    if cover_in_db["status"] == "sellersigned":
+        advance_subtotal_ht = utils.calculate_advance(
+            cover_in_db["subtotal_ht"],
+            cover_in_db["cover_specs"]["advance_percentage"]
+        )
+        advance_fees_ht = utils.calculate_advance(
+            cover_in_db["fees_ht"],
+            cover_in_db["cover_specs"]["advance_percentage"]
+        )
+        checkout = utils.calculate_checkout(
+            advance_subtotal_ht,
+            advance_fees_ht,
+            config["TVA_coeff_HT"],
+            config["TVA_cover_coeff_HT"]
+        )
+        product_name = f"Acompte pour la saillie de {cover_in_db['stallion_name']}"
+    elif cover_in_db["status"] == "downpaid":
+        balance_subtotal_ht = utils.calculate_balance(
+            cover_in_db["subtotal_ht"],
+            cover_in_db["cover_specs"]["advance_percentage"]
+        )
+        balance_fees_ht = utils.calculate_balance(
+            cover_in_db["fees_ht"],
+            cover_in_db["cover_specs"]["advance_percentage"]
+        )
+        checkout = utils.calculate_checkout(
+            balance_subtotal_ht,
+            balance_fees_ht,
+            config["TVA_coeff_HT"],
+            config["TVA_cover_coeff_HT"]
+        )
+        product_name = f"Solde pour la saillie de {cover_in_db['stallion_name']}"
+    else:
+        raise HTTPException(status_code=403, detail="status does not allow payment")
+
+    # expire existing session
+    if cover_in_db["status"] == "sellersigned" and "advance_session_id" in cover_in_db:
+        try:
+            stripe.checkout.Session.expire(cover_in_db["advance_session_id"])
+        except stripe.error.StripeError:
+            pass
+    elif cover_in_db["status"] == "downpaid" and "balance_session_id" in cover_in_db:
+        try:
+            stripe.checkout.Session.expire(cover_in_db["balance_session_id"])
+        except stripe.error.StripeError:
+            pass
+
+    # build new session
+    seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
+
+    try:
+        session = stripe.checkout.Session.create(
+            customer_email=current_user["email"],
+            line_items=[{
+                "price_data": {
+                    "currency": "eur",
+                    "product_data": {"name": product_name},
+                    "unit_amount": int(checkout.total * 100),
+                    "tax_behavior": "inclusive"
+                },
+                "quantity": 1
+            }],
+            payment_intent_data={
+                "application_fee_amount": int(checkout.service_fees * 100),
+                "transfer_data": {"destination": seller_in_db["stripe_account"]["account"]["id"]}
+            },
+            payment_method_options={
+                "link": {
+                    "setup_future_usage": "none"
+                }
+            },
+            mode="payment",
+            ui_mode="embedded",
+            return_url=f"http://localhost:4200/dashboard?coverId={str(cover_in_db['_id'])}"
+        )
+    except (KeyError, stripe.error.StripeError) as exc:
+        logger.error("failed to create checkout session: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to create checkout session") from exc
+
+    if session.client_secret is None:
+        logger.error("failed to create checkout session: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to create checkout session") from exc
+
+    try:
+        db.covers.update_one(
+            {"_id": cover_in_db["_id"]},
+            {
+                "$set": {
+                    f"{'balance' if cover_in_db['status'] == 'downpaid' else 'advance'}_session_id": session.id
+                }
+            }
+        )
+    except PyMongoError as exc:
+        logger.error("failed to write db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+    return schemas.Checkout(client_secret=session.client_secret)
+
+@router.post('/stripe-checkout-webhook')
+async def handle_stripe_checkout_webhook(request: Request, db = Depends(get_db)):
+    data = await request.body()
+    stripe_signature = request.headers['stripe-signature']
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=data, sig_header=stripe_signature, secret=checkout_endpoint_secret
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail='invalid payload') from exc
+    except stripe.error.SignatureVerificationError as exc:
+        raise HTTPException(status_code=400, detail='invalid signature') from exc
+
+    if event["type"] == "checkout.session.completed":
+        session_id = event['data']['object']['id']
+
+        try:
+            cover_in_db = db.covers.find_one({
+                "$or": [
+                    {"advance_session_id": session_id},
+                    {"balance_session_id": session_id}
+                ]
+            })
+        except PyMongoError as exc:
+            logger.error("failed to read db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to read db') from exc
+
+        if cover_in_db is None:
+            return {"message": "successfully received webhook"}
+
+        if "advance_session_id" in cover_in_db and cover_in_db["advance_session_id"] == session_id and cover_in_db["status"] == "sellersigned":
+            new_status = "downpaid"
+        elif "balance_session_id" in cover_in_db and cover_in_db["balance_session_id"] == session_id and cover_in_db["status"] == "downpaid":
+            new_status = "fullypaid"
+        else:
+            return {"message": "successfully received webhook"}
+
+        await covers_utils.step_forward_cover(cover_in_db, new_status, db, logger)
+
+        seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
+        buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
+        users_utils.notify_user(new_status, cover_in_db["_id"], "seller", seller_in_db, buyer_in_db, db, logger)
 
     return {"message": "successfully received webhook"}

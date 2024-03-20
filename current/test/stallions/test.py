@@ -1,22 +1,16 @@
 import unittest
 import os
-import sys
 import datetime
 
 from fastapi import FastAPI
 from bson.objectid import ObjectId
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-
 from context import fake_db, get_db, get_db_client, SMTPDummySession
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin/')))
-
 import app.auth.router as auth_router
 import app.stallions.router as stallions_router
 import app.stallions.utils as stallions_utils
-import app.pricing.utils as pricing_utils
+import app.payments.utils as payments_utils
 
 config = stallions_utils.load_config()
 
@@ -777,7 +771,7 @@ class StallionsTest(unittest.TestCase):
 
         # (0) 425+f (1) 570+f (2) 750+f (3) 1278+f (4)
 
-        pricing_config = pricing_utils.load_config()
+        payments_config = payments_utils.load_config()
 
         # (0) min
         response = client.get('/stallions/search?page=1&limit=16&min_price=2')
@@ -786,14 +780,14 @@ class StallionsTest(unittest.TestCase):
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         self.assertEqual(len(content_sorted_on_name), 2)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(
             425,
-            pricing_config['buyer_fees_coeff'],
-            pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(
+            payments_config['fees_coeff'],
+            payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(
             750,
-            pricing_config['buyer_fees_coeff'],
-            pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+            payments_config['fees_coeff'],
+            payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (0) max
         response = client.get('/stallions/search?page=1&limit=16&max_price=2')
@@ -807,8 +801,8 @@ class StallionsTest(unittest.TestCase):
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         self.assertEqual(len(content_sorted_on_name), 2)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (1) max
         response = client.get('/stallions/search?page=1&limit=16&max_price=568')
@@ -817,7 +811,7 @@ class StallionsTest(unittest.TestCase):
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         self.assertEqual(len(content_sorted_on_name), 1)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (2) min
         response = client.get('/stallions/search?page=1&limit=16&min_price=580')
@@ -826,38 +820,38 @@ class StallionsTest(unittest.TestCase):
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         self.assertEqual(len(content_sorted_on_name), 2)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(570, payments_utils.calculate_fees_ht(570, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (2) max
         response = client.get('/stallions/search?page=1&limit=16&max_price=740')
         self.assertEqual(response.status_code, 200)
 
-        pricing_config = pricing_utils.load_config()
+        payments_config = payments_utils.load_config()
         self.assertEqual(len(response.json()["content"]), 1)
 
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (3) min
         response = client.get('/stallions/search?page=1&limit=16&min_price=1277')
         self.assertEqual(response.status_code, 200)
 
-        pricing_config = pricing_utils.load_config()
+        payments_config = payments_utils.load_config()
         self.assertEqual(len(response.json()["content"]), 1)
 
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(1278, pricing_utils.calculate_fees_ht(1278, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(1278, payments_utils.calculate_fees_ht(1278, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (3) max
         response = client.get('/stallions/search?page=1&limit=16&max_price=1277')
         self.assertEqual(response.status_code, 200)
 
-        pricing_config = pricing_utils.load_config()
+        payments_config = payments_utils.load_config()
         self.assertEqual(len(response.json()["content"]), 2)
 
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # (4) min
         response = client.get('/stallions/search?page=1&limit=16&min_price=8500')
@@ -871,8 +865,8 @@ class StallionsTest(unittest.TestCase):
 
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # when min > max
         response = client.get('/stallions/search?page=1&limit=16&min_price=1230&max_price=1177')
@@ -883,13 +877,13 @@ class StallionsTest(unittest.TestCase):
         response = client.get('/stallions/search?page=1&limit=16&min_price=560&max_price=1277')
         self.assertEqual(response.status_code, 200)
 
-        pricing_config = pricing_utils.load_config()
+        payments_config = payments_utils.load_config()
         self.assertEqual(len(response.json()["content"]), 2)
 
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(570, payments_utils.calculate_fees_ht(570, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # when min height too high
         response = client.get('/stallions/search?page=1&limit=16&min_height=180')
@@ -915,28 +909,28 @@ class StallionsTest(unittest.TestCase):
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         self.assertEqual(len(content_sorted_on_name), 2)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # one breed
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["name"], "Bertrand")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         response = client.get('/stallions/search?page=1&limit=16&breeds=Arabe')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["name"], "Joris")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # among other breeds
         response = client.get('/stallions/search?page=1&limit=16&breeds=Arabe&breeds=Welsh')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
         self.assertEqual(response.json()["content"][0]["name"], "Joris")
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # breed and price
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580')
@@ -946,8 +940,8 @@ class StallionsTest(unittest.TestCase):
         content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         self.assertEqual(len(content_sorted_on_name), 2)
-        self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
-        self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(570, payments_utils.calculate_fees_ht(570, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # production breeds
         response = client.get('/stallions/search?page=1&limit=16&production_breeds=Fjord&production_breeds=Boulonnais')
@@ -969,7 +963,7 @@ class StallionsTest(unittest.TestCase):
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(570, payments_utils.calculate_fees_ht(570, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # cover_type
         response = client.get('/stallions/search?page=1&limit=16&cover_types=hand')
@@ -978,21 +972,21 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.json()["content"][0]["name"], "Joris")
         self.assertEqual(
             response.json()["content"][0]["price"],
-            pricing_utils.calculate_checkout(
+            payments_utils.calculate_checkout(
                 1278,
-                pricing_utils.calculate_fees_ht(1278, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']),
-                pricing_config['TVA_coeff_HT'],
-                pricing_config['TVA_cover_coeff_HT']
+                payments_utils.calculate_fees_ht(1278, payments_config['fees_coeff'], payments_config['fees_offset']),
+                payments_config['TVA_coeff_HT'],
+                payments_config['TVA_cover_coeff_HT']
             ).total
         )
         self.assertEqual(response.json()["content"][1]["name"], "Bertrand")
         self.assertEqual(
             response.json()["content"][1]["price"],
-            pricing_utils.calculate_checkout(
+            payments_utils.calculate_checkout(
                 570,
-                pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']),
-                pricing_config['TVA_coeff_HT'],
-                pricing_config['TVA_cover_coeff_HT']
+                payments_utils.calculate_fees_ht(570, payments_config['fees_coeff'], payments_config['fees_offset']),
+                payments_config['TVA_coeff_HT'],
+                payments_config['TVA_cover_coeff_HT']
             ).total
         )
 
@@ -1012,7 +1006,7 @@ class StallionsTest(unittest.TestCase):
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=100&production_breeds=Fjord&production_breeds=Trakehner&cover_types=hand')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["content"]), 1)
-        self.assertEqual(response.json()["content"][0]["price"], pricing_utils.calculate_checkout(570, pricing_utils.calculate_fees_ht(570, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT'], pricing_config['TVA_cover_coeff_HT']).total)
+        self.assertEqual(response.json()["content"][0]["price"], payments_utils.calculate_checkout(570, payments_utils.calculate_fees_ht(570, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total)
 
         # testing 422 when price, breed, production_breeds and cover_types
         response = client.get('/stallions/search?page=1&limit=16&breeds=Fjord&breeds=Arabe&min_price=580&production_breeds=Fjord&production_breeds=Trakehner&cover_types=hand&cover_types=doesnotexist')
@@ -1053,8 +1047,8 @@ class StallionsTest(unittest.TestCase):
         # content_sorted_on_name = sorted(response.json()["content"], key=lambda x: x["name"])
 
         # self.assertEqual(len(content_sorted_on_name), 2)
-        # self.assertEqual(content_sorted_on_name[0]["price"], pricing_utils.calculate_checkout(425, pricing_utils.calculate_fees_ht(425, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT']).total)
-        # self.assertEqual(content_sorted_on_name[1]["price"], pricing_utils.calculate_checkout(750, pricing_utils.calculate_fees_ht(750, pricing_config['buyer_fees_coeff'], pricing_config['buyer_fees_offset']), pricing_config['TVA_coeff_HT']).total)
+        # self.assertEqual(content_sorted_on_name[0]["price"], payments_utils.calculate_checkout(425, payments_utils.calculate_fees_ht(425, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT']).total)
+        # self.assertEqual(content_sorted_on_name[1]["price"], payments_utils.calculate_checkout(750, payments_utils.calculate_fees_ht(750, payments_config['fees_coeff'], payments_config['fees_offset']), payments_config['TVA_coeff_HT']).total)
 
         # different pages and limits
         response = client.get('/stallions/search?page=2&limit=16')

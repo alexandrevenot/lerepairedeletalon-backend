@@ -17,7 +17,7 @@ class MosaicProfileInfo(BaseModel):
     city: str
     dep_name: str
     reg_name: str
-    price: int
+    price: float
     photo_url: str
 
     @field_validator('cover_types')

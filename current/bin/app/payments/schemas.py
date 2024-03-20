@@ -74,3 +74,15 @@ class IndividualAccount(BaseModel):
 
 class IndividualStripeAccountInDB(BaseModel):
     account: IndividualAccount
+
+class PriceWithFees(BaseModel):
+    subtotal: float
+    service_fees: float
+    total: float
+
+class Checkout(BaseModel):
+    client_secret: str
+
+class CoverPaymentDetails(BaseModel):
+    subtotal_ht: int
+    fees_ht: float
