@@ -1,9 +1,7 @@
 import unittest
 import base64
 import os
-import sys
 import datetime
-import math
 
 from unittest.mock import AsyncMock, patch
 from aioresponses import aioresponses
@@ -22,6 +20,7 @@ import app.payments.utils as payments_utils
 import app.contracts.router as contracts_router
 import app.contracts.utils as contracts_utils
 import app.users.router as users_router
+import app.stallion_owners.router as stallion_owners_router
 
 stallions_config = stallions_utils.load_config()
 payments_config = payments_utils.load_config()
@@ -35,6 +34,7 @@ server.dependency_overrides[stallions_router.get_db] = get_db
 server.dependency_overrides[covers_router.get_db] = get_db
 server.dependency_overrides[contracts_router.get_db] = get_db
 server.dependency_overrides[users_router.get_db] = get_db
+server.dependency_overrides[stallion_owners_router.get_db] = get_db
 
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[stallions_router.get_db_client] = get_db_client
@@ -52,6 +52,7 @@ server.include_router(covers_router.router)
 server.include_router(contracts_router.router)
 server.include_router(payments_router.router)
 server.include_router(users_router.router)
+server.include_router(stallion_owners_router.router)
 
 client = TestClient(server)
 
@@ -81,6 +82,25 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.vf = open('/lerepairedeletalon/server/current/test/stallions/verification_file.png', 'rb')
         self.ph = open('/lerepairedeletalon/server/current/test/stallions/sellefrançais.jpg', 'rb')
 
+        # add a stallion owner
+        query = {
+            "business_type": "company",
+            "firstname": "Georgelin",
+            "lastname": "Marcellin",
+            "gender": "Monsieur",
+            "company_name": "LRDE",
+            "company_structure": "SAS",
+            "capital": "1500",
+            "siren": "123456789",
+            "head_office_address_line1": "Whatever",
+            "head_office_address_postal_code": "Whatever",
+            "head_office_address_city": "Whatever",
+            "role_in_company": "President"
+        }
+        response = client.post('/stallion-owners/stallion-owner', json=query, headers=owner_headers)
+        self.assertEqual(response.status_code, 200)
+        stallion_owner_id = response.json()["id"]
+
         # add a stallion
         post_stallion_body = {}
 
@@ -92,6 +112,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         }
 
         post_stallion_body["editable_fields_body"] = {
+            "stallion_owner_id": stallion_owner_id,
             "main_desc": "desc",
             "color": "Bai",
             "height": 170,
@@ -181,7 +202,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # when the stallion is not visible
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
+            "seller_id": str(stallion_in_db["handler_id"]),
             "stallion_nsire": "65123458X",
             "mare_nsire": "64853156156X",
             "mare_name": "Bernadette de Normandie",
@@ -190,7 +211,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
             "cover_type": "lib"
         }
         response = client.post('/covers/cover', json=body, headers=headers)
-
         self.assertEqual(response.status_code, 403)
 
         fake_db.stallions.update_many(
@@ -204,7 +224,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # when everything is fine
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
+            "seller_id": str(stallion_in_db["handler_id"]),
             "stallion_nsire": "65123458X",
             "mare_nsire": "64853156156X",
             "mare_name": "Bernadette de Normandie",
@@ -220,7 +240,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # when seller id = buyer id
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
+            "seller_id": str(stallion_in_db["handler_id"]),
             "stallion_nsire": "65123458X",
             "mare_nsire": "64853156156X",
             "mare_name": "Bernadette de Normandie",
@@ -233,7 +253,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # when the stallion nsire does not exist
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
+            "seller_id": str(stallion_in_db["handler_id"]),
             "stallion_nsire": "wtf",
             "mare_nsire": "64853156156X",
             "mare_name": "Bernadette de Normandie",
@@ -272,7 +292,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         # when the cover type does not exist
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
+            "seller_id": str(stallion_in_db["handler_id"]),
             "stallion_nsire": "65123458X",
             "mare_nsire": "64853156156X",
             "mare_name": "Bernadette de Normandie",
@@ -287,7 +307,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         # REQUESTED
         # when everything is fine
         body = {
-            "seller_id": str(stallion_in_db["owner"]),
+            "seller_id": str(stallion_in_db["handler_id"]),
             "stallion_nsire": "65123458X",
             "mare_nsire": "64853156156X",
             "mare_name": "Bernadette de Normandie",
@@ -300,7 +320,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
 
         cover_in_db = fake_db.covers.find_one({},{})
 
-        self.assertEqual(cover_in_db["seller_id"], stallion_in_db["owner"])
+        self.assertEqual(cover_in_db["seller_id"], stallion_in_db["handler_id"])
         self.assertEqual(cover_in_db["stallion_nsire"], "65123458X")
         self.assertEqual(cover_in_db["mare_nsire"], "64853156156X")
         self.assertEqual(cover_in_db["mare_name"], "Bernadette de Normandie")
@@ -384,7 +404,7 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         second_stallion_in_db = fake_db.stallions.find_one({"_id": ObjectId(second_stallion_id)})
 
         body = {
-            "seller_id": str(second_stallion_in_db["owner"]),
+            "seller_id": str(second_stallion_in_db["handler_id"]),
             "stallion_nsire": "591784564X",
             "mare_nsire": "1864896456X",
             "mare_name": "Mauricette",

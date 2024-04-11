@@ -148,3 +148,27 @@ class BucketGetter:
 
     async def __call__(self):
         return ObjectStorageManager(self.bucket_name).buckets[self.bucket_name]
+
+async def get_stallion_owner_in_db(stallion_owner_id, db, logger):
+    if not ObjectId.is_valid(stallion_owner_id):
+        raise HTTPException(status_code=422, detail="stallion_owner_id not readable")
+
+    stallion_owner_id = ObjectId(stallion_owner_id)
+
+    try:
+        stallion_owner_in_db = db.stallion_owners.find_one({"_id": stallion_owner_id})
+    except PyMongoError as exc:
+        logger.error("failed to read db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="failed to read db") from exc
+
+    if stallion_owner_in_db is None:
+        raise HTTPException(status_code=404, detail="stallion_owner not found")
+
+    return stallion_owner_in_db
+
+class StallionOwnerInDBGetter:
+    def __init__(self, logger):
+        self.logger = logger
+
+    async def __call__(self, stallion_owner_id: str = Path(...), db = Depends(get_db)):
+        return await get_stallion_owner_in_db(stallion_owner_id, db, self.logger)

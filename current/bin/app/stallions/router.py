@@ -13,7 +13,8 @@ import app.stallions.schemas as schemas
 import app.geoloc.utils as geoloc_utils
 import app.payments.utils as payments_utils
 
-from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, get_db_client, BucketGetter, get_current_user_id
+from app.dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
+    get_db_client, BucketGetter, get_current_user_id, get_stallion_owner_in_db
 
 # configs
 global_config = utils.load_global_config()
@@ -174,8 +175,8 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
     if mode == 'profile' and stallion_in_db["profile_status"] != "visible":
         raise HTTPException(status_code=403, detail="stallion profile information cant be fetched")
 
-    if mode == 'for_edition' and user_id != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can get stallion information for edition")
+    if mode == 'for_edition' and user_id != stallion_in_db["handler_id"]:
+        raise HTTPException(status_code=403, detail="only handler can get stallion information for edition")
 
     if mode == 'for_favorite':
         return schemas.StallionProfileInformationForFavorite(
@@ -213,15 +214,16 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
             'dep_name',
             'reg_name'
         ]
-        kwargs['owner'] = str(stallion_in_db['owner'])
+        kwargs['handler_id'] = str(stallion_in_db['handler_id'])
         kwargs['age'] = utils.calculate_age(stallion_in_db['birthdate'])
-    else:
+    else: # mode == 'for_edition'
         fields += [
             'postal_code'
         ]
         kwargs['birthdate'] = stallion_in_db['birthdate'].strftime('%d/%m/%Y')
         kwargs['lng'] = stallion_in_db['location']['coordinates'][0]
         kwargs['lat'] = stallion_in_db['location']['coordinates'][1]
+        kwargs['stallion_owner_id'] = str(stallion_in_db['stallion_owner_id'])
 
     for field in fields:
         kwargs[field] = stallion_in_db[field]
@@ -230,7 +232,7 @@ async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_
 
 @router.get('/my-stallions', response_model=schemas.GetMyStallionsRM)
 async def get_my_stallions(user_id = Depends(get_current_user_id), db = Depends(get_db)):
-    query = {"owner": user_id}
+    query = {"handler_id": user_id}
 
     try:
         cursor = db.stallions.find(query, {"_id": 1, "name": 1, "breed": 1, "thumbnail_photo": 1, "profile_status": 1, "last_update_timestamp":1})
@@ -260,6 +262,12 @@ async def register_new_stallion(
     _2 = Depends(get_admin_files_bucket), # to check that it works before calling POST /stallion-files
     db = Depends(get_db)
 ):
+    stallion_owner_in_db = await get_stallion_owner_in_db(
+        editable_fields_body.stallion_owner_id,
+        db,
+        logger
+    )
+
     # fields parsing
     try:
         birthdate_datetime = datetime.strptime(final_fields_body.birthdate, "%d/%m/%Y")
@@ -294,7 +302,8 @@ async def register_new_stallion(
 
     try:
         insert_one_result = db.stallions.insert_one({
-            "owner": user_id,
+            "handler_id": user_id,
+            "stallion_owner_id": stallion_owner_in_db["_id"],
             "name": final_fields_body.name,
             "breed": final_fields_body.breed,
             "n_sire": final_fields_body.n_sire,
@@ -328,7 +337,7 @@ async def register_new_stallion(
     return {
         "message": "stallion registered successfully",
         "stallion_id": str(insert_one_result.inserted_id)
-        }
+    }
 
 @router.post('/stallion-files/{stallion_id}')
 async def register_new_stallion_files(
@@ -341,8 +350,8 @@ async def register_new_stallion_files(
     admin_files_bucket = Depends(get_admin_files_bucket),
     db_client = Depends(get_db_client)
 ):
-    if user_id != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can post stallion files")
+    if user_id != stallion_in_db["handler_id"]:
+        raise HTTPException(status_code=403, detail="only handler can post stallion files")
 
     if "photos" in stallion_in_db or "verification_file" in stallion_in_db:
         raise HTTPException(status_code=403, detail="can post only once on this route")
@@ -427,8 +436,8 @@ async def edit_stallion_profile(
     user_id = Depends(get_current_user_id),
     db = Depends(get_db)
 ):
-    if user_id != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can edit stallion")
+    if user_id != stallion_in_db["handler_id"]:
+        raise HTTPException(status_code=403, detail="only handler can edit stallion")
 
     location = {
         "type": "Point",
@@ -495,8 +504,8 @@ async def update_stallion_photos(
     if new_photos is None:
         new_photos = []
 
-    if user_id != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can update stallion photos")
+    if user_id != stallion_in_db["handler_id"]:
+        raise HTTPException(status_code=403, detail="only handler can update stallion photos")
 
     if "photos" not in stallion_in_db or "thumbnail_photo" not in stallion_in_db:
         raise HTTPException(status_code=403, detail="cannot put stallion files yet")
@@ -620,8 +629,8 @@ async def delete_stallion(
     stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
     admin_files_bucket = Depends(get_admin_files_bucket)
     ):
-    if user_id != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can delete stallion")
+    if user_id != stallion_in_db["handler_id"]:
+        raise HTTPException(status_code=403, detail="only handler can delete stallion")
 
     with db_client.start_session() as session:
         with session.start_transaction():
@@ -666,8 +675,8 @@ async def update_stallion_profile_status(
     user_id = Depends(get_current_user_id),
     db = Depends(get_db)
     ):
-    if user_id != stallion_in_db["owner"]:
-        raise HTTPException(status_code=403, detail="only owner can change stallion profile status")
+    if user_id != stallion_in_db["handler_id"]:
+        raise HTTPException(status_code=403, detail="only handler can change stallion profile status")
 
     if new_status == "visible":
         if stallion_in_db["profile_status"] != "hidden":

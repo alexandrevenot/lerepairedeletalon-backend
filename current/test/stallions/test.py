@@ -11,6 +11,7 @@ import app.auth.router as auth_router
 import app.stallions.router as stallions_router
 import app.stallions.utils as stallions_utils
 import app.payments.utils as payments_utils
+import app.stallion_owners.router as stallion_owners_router
 
 config = stallions_utils.load_config()
 
@@ -18,6 +19,7 @@ server = FastAPI()
 
 server.dependency_overrides[auth_router.get_db] = get_db
 server.dependency_overrides[stallions_router.get_db] = get_db
+server.dependency_overrides[stallion_owners_router.get_db] = get_db
 
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[stallions_router.get_db_client] = get_db_client
@@ -37,6 +39,7 @@ auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
+server.include_router(stallion_owners_router.router)
 
 client = TestClient(server)
 
@@ -63,6 +66,25 @@ class StallionsTest(unittest.TestCase):
 
         headers = {"Authorization": f"Bearer {access_token}"}
 
+        # add a stallion owner first
+        query = {
+            "business_type": "company",
+            "firstname": "Georgelin",
+            "lastname": "Marcellin",
+            "gender": "Monsieur",
+            "company_name": "LRDE",
+            "company_structure": "SAS",
+            "capital": "1500",
+            "siren": "123456789",
+            "head_office_address_line1": "Whatever",
+            "head_office_address_postal_code": "Whatever",
+            "head_office_address_city": "Whatever",
+            "role_in_company": "President"
+        }
+        response = client.post('/stallion-owners/stallion-owner', json=query, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        stallion_owner_id = response.json()["id"]
+
         body = {}
 
         body["final_fields_body"] = {
@@ -73,6 +95,7 @@ class StallionsTest(unittest.TestCase):
         }
 
         body["editable_fields_body"] = {
+            "stallion_owner_id": stallion_owner_id,
             "main_desc": "desc",
             "color": "Bai tâcheté",
             "height": 170.5,
@@ -121,7 +144,6 @@ class StallionsTest(unittest.TestCase):
         }
 
         response = client.post('/stallions/stallion', json=body, headers=headers)
-
         self.assertEqual(response.status_code, 200)
 
         stallion_id = response.json()["stallion_id"]
@@ -155,8 +177,8 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.json()
 
-        owner_id = str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"])
-        self.assertEqual(content["owner"], owner_id)
+        handler_id = str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"])
+        self.assertEqual(content["handler_id"], handler_id)
         self.assertEqual(content["name"], "Michel du Rouet")
         self.assertEqual(content["breed"], "Selle Français")
         self.assertEqual(content["n_sire"], "8461684685X")
@@ -190,6 +212,7 @@ class StallionsTest(unittest.TestCase):
 
 
         body = {
+            "stallion_owner_id": stallion_owner_id,
             "main_desc": "other desc",
             "color": "Bai plus tâcheté",
             "height": 171,
@@ -258,8 +281,8 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.json()
 
-        owner_id = str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"])
-        self.assertEqual(content["owner"], owner_id)
+        handler_id = str(fake_db.users.find_one({"email": "lrdeservice@gmail.com"})["_id"])
+        self.assertEqual(content["handler_id"], handler_id)
         self.assertEqual(content["name"], "Michel du Rouet")
         self.assertEqual(content["breed"], "Selle Français")
         self.assertEqual(content["n_sire"], "8461684685X")
@@ -309,6 +332,7 @@ class StallionsTest(unittest.TestCase):
         }
 
         body["editable_fields_body"] = {
+            "stallion_owner_id": stallion_owner_id,
             "main_desc": "desc",
             "color": "Bai tâcheté",
             "height": 170.5,
@@ -554,6 +578,25 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         # add stallions for search
+        # add a 2nd stallion owner
+        query = {
+            "business_type": "company",
+            "firstname": "Georgelinette",
+            "lastname": "Marcellinette",
+            "gender": "Monsieur",
+            "company_name": "LRDE",
+            "company_structure": "SAS",
+            "capital": "1500",
+            "siren": "123456789",
+            "head_office_address_line1": "Whatever",
+            "head_office_address_postal_code": "Whatever",
+            "head_office_address_city": "Whatever",
+            "role_in_company": "President"
+        }
+        response = client.post('/stallion-owners/stallion-owner', json=query, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        stallion_owner_id_2 = response.json()["id"]
+
         body = {}
 
         body["final_fields_body"] = {
@@ -564,6 +607,7 @@ class StallionsTest(unittest.TestCase):
         }
 
         body["editable_fields_body"] = {
+            "stallion_owner_id": stallion_owner_id,
             "main_desc": "desc",
             "color": "Bai",
             "height": 170,
@@ -645,6 +689,7 @@ class StallionsTest(unittest.TestCase):
         }
 
         body["editable_fields_body"] = {
+            "stallion_owner_id": stallion_owner_id,
             "main_desc": "desc",
             "color": "Blanc",
             "height": 177,
@@ -742,6 +787,15 @@ class StallionsTest(unittest.TestCase):
 
         response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=visible', headers=headers)
         self.assertEqual(response.status_code, 200)
+
+        # test stallion owners first
+        response = client.delete(f'/stallion-owners/stallion-owner/{stallion_owner_id}?stallion_id=', headers=headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], 'a stallion is linked to this stallion owner')
+    
+        response = client.delete(f'/stallion-owners/stallion-owner/{stallion_owner_id}?stallion_id={bertrand_id}', headers=headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], 'this stallion is linked to this stallion owner')
 
         # with page <= 0
         response = client.get('/stallions/search?page=0&limit=16')

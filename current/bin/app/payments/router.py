@@ -55,17 +55,15 @@ async def create_stripe_account(
         current_level = 0
 
     if current_level != 2:
-        raise HTTPException(status_code=409, detail="legal identity level is too low")
-
-    if "stripe_account" in current_user:
-        raise HTTPException(status_code=409, detail="already has a stripe account")
+        raise HTTPException(status_code=409, detail="legal identity level has to be 2")
 
     try:
         account_creation_response = stripe.Account.create(
             type="custom",
             country="FR",
             capabilities={
-                "transfers": {"requested": True}
+                "transfers": {"requested": True},
+                "card_payments": {"requested": True}
             },
                 business_profile={
                     "mcc": "0742",
