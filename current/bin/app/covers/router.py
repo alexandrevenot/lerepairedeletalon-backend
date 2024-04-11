@@ -92,7 +92,7 @@ async def create_cover(
         stallion_in_db = db.stallions.find_one(
             {
                 "n_sire": cover.stallion_nsire,
-                "owner": seller_id
+                "handler_id": seller_id
             },{
                 "cover_specs": 1,
                 "name": 1,

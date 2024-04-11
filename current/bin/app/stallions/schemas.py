@@ -122,6 +122,7 @@ class CoverSpecs(BaseModel):
         return self
 
 class EditableStallionFields(BaseModel):
+    stallion_owner_id: str
     main_desc: str
     color: str
     height: Annotated[float, Field(ge=0)]
@@ -170,7 +171,7 @@ class EditableStallionFields(BaseModel):
         return check_vaccines(value)
 
 class StallionProfileInformation(BaseModel):
-    owner: str
+    handler_id: str
     name: str
     breed: str
     n_sire: str
@@ -218,6 +219,7 @@ class StallionProfileInformationForEdition(BaseModel):
     production_breeds: list[str]
     cover_specs: CoverSpecs
     cover_additional_info: str
+    stallion_owner_id: str
 
 class StallionProfileInformationForFavorite(BaseModel):
     name: str

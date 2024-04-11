@@ -23,6 +23,7 @@ import app.users.router as users_router
 import app.mailing.router as mailing_router
 import app.admin.router as admin_router
 import app.payments.router as payments_router
+import app.stallion_owners.router as stallion_owners_router
 
 server = FastAPI()
 
@@ -35,6 +36,7 @@ server.include_router(contracts_router.router, tags=["Contracts"])
 server.include_router(users_router.router, tags=["Users"])
 server.include_router(mailing_router.router, tags=["Mailing"])
 server.include_router(admin_router.router, tags=["Admin"])
+server.include_router(stallion_owners_router.router, tags=["Stallion Owners"])
 
 origins = [
     "http://localhost:4200",

@@ -10,7 +10,7 @@ import app.admin.utils as utils
 import app.admin.schemas as schemas
 import app.stallions.utils as stallions_utils
 
-from app.dependencies import get_db, StallionInDBGetter, UserInDBGetter
+from app.dependencies import get_db, StallionInDBGetter, UserInDBGetter, StallionOwnerInDBGetter
 from app.auth.utils import verify_password
 
 # configs
@@ -34,6 +34,7 @@ logger.info('Logger initialized')
 # dependencies
 get_stallion_in_db = StallionInDBGetter(logger)
 get_user_in_db = UserInDBGetter(logger)
+get_stallion_owner_in_db = StallionOwnerInDBGetter(logger)
 
 # routes
 router = APIRouter(prefix='/admin')
@@ -87,7 +88,8 @@ async def get_stallion_profile(stallion_in_db = Depends(get_stallion_in_db), _ =
 
     fields_to_be_serialized = [
         '_id',
-        'owner',
+        'handler_id',
+        'stallion_owner_id',
         'birthdate',
         'last_update_timestamp'
     ]
@@ -99,6 +101,35 @@ async def get_stallion_profile(stallion_in_db = Depends(get_stallion_in_db), _ =
         result[field] = str(stallion_in_db[field])
 
     result["photos"] = [str(oid) for oid in stallion_in_db["photos"]]
+
+    return result
+
+@router.get('/stallion-owner/{stallion_owner_id}')
+async def get_stallion_owner(stallion_owner_in_db = Depends(get_stallion_owner_in_db), _ = Depends(verify_admin_password)):
+    result = {}
+    fields = [
+        'business_type',
+        'firstname',
+        'lastname',
+        'gender',
+        'birthdate',
+        'birthplace',
+        'citizenship',
+        'address_line1',
+        'address_line2',
+        'address_postal_code',
+        'address_city'
+    ]
+
+    fields_to_be_serialized = [
+        'handler_id'
+    ]
+
+    for field in fields:
+        result[field] = stallion_owner_in_db[field]
+
+    for field in fields_to_be_serialized:
+        result[field] = str(stallion_owner_in_db[field])
 
     return result
 

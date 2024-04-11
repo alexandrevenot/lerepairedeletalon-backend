@@ -19,5 +19,5 @@ send_demo_contracts: true
 
 # obj storage
 gc_storage_prefix: https://storage.googleapis.com/
-stallion_photos_bucket_name: lrde-public-photos
-admin_files_bucket_name: lrde-admin-files
+stallion_photos_bucket_name: lerepairedeletalon-public
+admin_files_bucket_name: lerepairedeletalon-private
