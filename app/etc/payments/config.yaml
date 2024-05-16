@@ -1,0 +1,8 @@
+TVA_coeff_HT: 0.2
+TVA_cover_coeff_HT: 0.055
+fees_coeff: 0.08
+fees_offset: 0.0
+
+api_key: sk_test_51OvTQH2M9MS38ftinIjvSgCfFzcnTgIUPgYoTXYDlwcx2OTt2JPfZzVZHPMEK9ho1CLpDfdRV5GWTLZeJh3iSnr700QZJ1bfIT
+accounts_endpoint_secret: whsec_f6LnqrvkBll72TwohQbEUDcryMA80qWn
+checkout_endpoint_secret: whsec_uqWRJRyw3oo2ujBfjTvWHMiMNLpqtv9u

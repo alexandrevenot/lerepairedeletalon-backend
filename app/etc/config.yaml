@@ -1,0 +1,23 @@
+# company
+company_name: Le Repaire de l'Étalon
+
+# backend
+host: localhost
+port: 3001
+
+# frontend
+frontend_url: http://localhost:4200
+
+# esignatures
+esignatures_url: https://esignatures.io
+send_demo_contracts: true
+
+# db
+db_to_use: test
+mongo_url: mongodb-25a50afa-of01ab2eb.database.cloud.ovh.net
+db_username: ventofix
+db_password: jyeKRngTb7a3f6cMA40z
+
+# obj storage
+stallion_photos_bucket_name: lerepairedeletalon-public
+admin_files_bucket_name: lerepairedeletalon-private
