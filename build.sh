@@ -14,3 +14,5 @@ VERSION=$(cat VERSION | tr -d '\n')
 sudo docker build -t "api:${VERSION}" .
 
 rm -r app_build/
+
+sudo docker save -o "backend-${VERSION}.tar" "api:${VERSION}"
