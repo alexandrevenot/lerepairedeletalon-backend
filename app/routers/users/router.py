@@ -234,85 +234,93 @@ async def post_user_review(
     }
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                insert_one_result = db.reviews.insert_one(review)
-                inserted_id = insert_one_result.inserted_id
+        session.start_transaction()
+        try:
+            insert_one_result = db.reviews.insert_one(review, session=session)
+            inserted_id = insert_one_result.inserted_id
 
-                db.users.update_one(
-                    {"_id": current_user["_id"]},
-                    {
-                        "$push": {
-                            f"reviews.given.{'buyer' if reviewer_is_buyer else 'seller'}": inserted_id
-                        }
+            db.users.update_one(
+                {"_id": current_user["_id"]},
+                {
+                    "$push": {
+                        f"reviews.given.{'buyer' if reviewer_is_buyer else 'seller'}": inserted_id
                     }
-                )
+                },
+                session=session
+            )
+
+            db.users.update_one(
+                {"_id": user_in_db["_id"]},
+                {
+                    "$push": {
+                        f"reviews.received.{'seller' if reviewer_is_buyer else 'buyer'}": inserted_id
+                    }
+                },
+                session=session
+            )
+
+            reviewed_pov = 'seller' if reviewer_is_buyer else 'buyer'
+            if reviewed_pov == 'buyer':
+                try:
+                    len_old_reviews_list = len(user_in_db["reviews"]["received"]["buyer"])
+                except KeyError:
+                    len_old_reviews_list = 0
+
+                try:
+                    old_buyer_score = user_in_db["buyer_score"]
+                except KeyError:
+                    old_buyer_score = 0
+
+                new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
 
                 db.users.update_one(
                     {"_id": user_in_db["_id"]},
                     {
-                        "$push": {
-                            f"reviews.received.{'seller' if reviewer_is_buyer else 'buyer'}": inserted_id
+                        "$set": {
+                            "buyer_score": new_average_score
                         }
-                    }
+                    },
+                    session=session
                 )
+            else:
+                try:
+                    len_old_reviews_list = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"]
+                except KeyError:
+                    len_old_reviews_list = 0
 
-                reviewed_pov = 'seller' if reviewer_is_buyer else 'buyer'
-                if reviewed_pov == 'buyer':
-                    try:
-                        len_old_reviews_list = len(user_in_db["reviews"]["received"]["buyer"])
-                    except KeyError:
-                        len_old_reviews_list = 0
+                try:
+                    old_buyer_score = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"]
+                except KeyError:
+                    old_buyer_score = 0
 
-                    try:
-                        old_buyer_score = user_in_db["buyer_score"]
-                    except KeyError:
-                        old_buyer_score = 0
+                new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
 
-                    new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
-
-                    db.users.update_one(
-                        {"_id": user_in_db["_id"]},
-                        {
-                            "$set": {
-                                "buyer_score": new_average_score
-                            }
-                        }
-                    )
-                else:
-                    try:
-                        len_old_reviews_list = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["nb"]
-                    except KeyError:
-                        len_old_reviews_list = 0
-
-                    try:
-                        old_buyer_score = user_in_db["seller_score"][cover_in_db["stallion_nsire"]]["avg_score"]
-                    except KeyError:
-                        old_buyer_score = 0
-
-                    new_average_score = ((old_buyer_score * len_old_reviews_list) + query.score)/(len_old_reviews_list + 1)
-
-                    db.users.update_one(
-                        {"_id": user_in_db["_id"]},
-                        {
-                            "$set": {
-                                f"seller_score.{cover_in_db['stallion_nsire']}.avg_score": new_average_score,
-                                f"seller_score.{cover_in_db['stallion_nsire']}.nb": len_old_reviews_list + 1
-                            }
-                        }
-                    )
-
-                db.covers.update_one(
-                    {"_id": cover_in_db["_id"]},
+                db.users.update_one(
+                    {"_id": user_in_db["_id"]},
                     {
                         "$set": {
-                            f"reviewed_by_{'buyer' if reviewer_is_buyer else 'seller'}": True
+                            f"seller_score.{cover_in_db['stallion_nsire']}.avg_score": new_average_score,
+                            f"seller_score.{cover_in_db['stallion_nsire']}.nb": len_old_reviews_list + 1
                         }
-                    }
+                    },
+                    session=session
                 )
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+            db.covers.update_one(
+                {"_id": cover_in_db["_id"]},
+                {
+                    "$set": {
+                        f"reviewed_by_{'buyer' if reviewer_is_buyer else 'seller'}": True
+                    }
+                },
+                session=session
+            )
+            session.commit_transaction()
+
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return {"message": "reviewed cover successfully"}
 
@@ -442,61 +450,65 @@ async def delete_account(
     admin_files_bucket = Depends(get_admin_files_bucket)
 ):
     with db_client.start_session() as session:
-        with session.start_transaction():
+        session.start_transaction()
+        try:
             try:
-                try:
-                    stripe_accound_id = current_user["stripe_account"]["account"]["id"]
-                except KeyError:
-                    stripe_accound_id = None
+                stripe_accound_id = current_user["stripe_account"]["account"]["id"]
+            except KeyError:
+                stripe_accound_id = None
 
-                if stripe_accound_id is not None:
-                    payments_utils.delete_stripe_account(stripe_accound_id)
+            if stripe_accound_id is not None:
+                payments_utils.delete_stripe_account(stripe_accound_id)
 
-                db.stallion_owners.delete_many({
-                    "handler_id": current_user["_id"]
-                })
+            db.stallion_owners.delete_many({
+                "handler_id": current_user["_id"]
+            }, session=session)
 
-                db.password_update_codes.delete_many({
-                    "email": current_user["email"]
-                })
+            db.password_update_codes.delete_many({
+                "email": current_user["email"]
+            }, session=session)
 
-                db.email_verification_codes.delete_many({
-                    "email": current_user["email"]
-                })
+            db.email_verification_codes.delete_many({
+                "email": current_user["email"]
+            }, session=session)
 
-                for stallion_in_db in db.stallions.find({"owner": current_user["_id"]}):
-                    db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+            for stallion_in_db in db.stallions.find({"owner": current_user["_id"]}):
+                db.stallions.delete_one({"_id": stallion_in_db["_id"]}, session=session)
 
-                    db.users.update_many(
-                        {"favorite_stallions": {"$exists": True, "$in": [stallion_in_db["_id"]]}},
-                        {
-                            "$pull": {
-                                "favorite_stallions": stallion_in_db["_id"]
-                            }
+                db.users.update_many(
+                    {"favorite_stallions": {"$exists": True, "$in": [stallion_in_db["_id"]]}},
+                    {
+                        "$pull": {
+                            "favorite_stallions": stallion_in_db["_id"]
                         }
-                    )
+                    },
+                    session=session
+                )
 
-                    if "photos" in stallion_in_db:
-                        old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
-                        old_photo_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in stallion_in_db["photos"]]
+                if "photos" in stallion_in_db:
+                    old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
+                    old_photo_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in stallion_in_db["photos"]]
 
-                        old_tp_blob.delete()
-                        for blob in old_photo_blobs:
-                            blob.delete()
+                    old_tp_blob.delete()
+                    for blob in old_photo_blobs:
+                        blob.delete()
 
-                    if "verification_file" in stallion_in_db:
-                        vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
-                        vf_blob.delete()
+                if "verification_file" in stallion_in_db:
+                    vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
+                    vf_blob.delete()
 
-                db.users.delete_one({"_id": current_user["_id"]})
+            db.users.delete_one({"_id": current_user["_id"]}, session=session)
+            session.commit_transaction()
 
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-            except Exception as exc:
-                logger.error("failed to write object storage: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+        except Exception as exc:
+            session.abort_transaction()
+            logger.error("failed to write object storage: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully deleted account"}
 

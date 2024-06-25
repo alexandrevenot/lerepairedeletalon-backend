@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, mongomock_session_errors_handler
 import routers.auth.router as auth_router
 import routers.mailing.router as mailing_router
 from routers.auth.utils import verify_password
@@ -24,6 +24,7 @@ server.include_router(mailing_router.router)
 client = TestClient(server)
 
 class MailingTest(unittest.TestCase):
+    @mongomock_session_errors_handler
     def test(self):
         # register a new user
         response = client.post('/auth/register', json={

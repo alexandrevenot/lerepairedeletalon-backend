@@ -1,3 +1,4 @@
+import itertools
 import uuid
 import logging
 import logging.handlers
@@ -166,6 +167,26 @@ async def search(
             photo_url=document["thumbnail_photo"]
         ))
     return schemas.SearchRM(content=mp_l)
+
+@router.get('/available-stallion-breeds', response_model=schemas.AvailableStallionBreeds)
+async def get_available_stallion_breeds(db = Depends(get_db)):
+    try:
+        stallions = db.stallions.find({"profile_status": "visible"}, {"breed": 1})
+    except PyMongoError as exc:
+        logger.error("failed to read db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
+
+    return schemas.AvailableStallionBreeds(breeds=sorted(list(set(stallion["breed"] for stallion in stallions))))
+
+@router.get('/available-stallion-production-breeds', response_model=schemas.AvailableStallionBreeds)
+async def get_available_stallion_production_breeds(db = Depends(get_db)):
+    try:
+        stallions = db.stallions.find({"profile_status": "visible"}, {"production_breeds": 1})
+    except PyMongoError as exc:
+        logger.error("failed to read db: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail='failed to read db') from exc
+
+    return schemas.AvailableStallionBreeds(breeds=sorted(list(set(itertools.chain(*[stallion["production_breeds"] for stallion in stallions])))))
 
 @router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformationForFavorite | schemas.StallionProfileInformation | schemas.StallionProfileInformationForEdition)
 async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), user_id = Depends(get_current_user_id)):
@@ -403,9 +424,10 @@ async def register_new_stallion_files(
         photo_blobs.append(blob)
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.stallions.update_one({
+        session.start_transaction()
+        try:
+            db.stallions.update_one(
+                {
                     "_id": stallion_in_db["_id"]
                 },
                 {
@@ -415,21 +437,26 @@ async def register_new_stallion_files(
                         "photos": photos_blob_names,
                         "last_update_timestamp": datetime.now()
                     }
-                })
+                },
+                session=session
+            )
 
-                vf_blob.upload_from_file(verification_file.file, rewind=True)
-                tp_blob.upload_from_file(thumbnail_photo, rewind=True)
+            vf_blob.upload_from_file(verification_file.file, rewind=True)
+            tp_blob.upload_from_file(thumbnail_photo, rewind=True)
 
-                for photo_blob, photo_f in zip(photo_blobs, photos):
-                    photo_blob.upload_from_file(photo_f.file, rewind=True)
+            for photo_blob, photo_f in zip(photo_blobs, photos):
+                photo_blob.upload_from_file(photo_f.file, rewind=True)
+            session.commit_transaction()
 
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
 
-            except Exception as exc:
-                logger.error("failed to write object storage: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+        except Exception as exc:
+            session.abort_transaction()
+            logger.error("failed to write object storage: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully added stallion files"}
 
@@ -588,17 +615,18 @@ async def update_stallion_photos(
         new_photos_blobs.append(blob)
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                kwargs = {}
+        session.start_transaction()
+        try:
+            kwargs = {}
 
-                if should_update_thumbnail:
-                    kwargs["thumbnail_photo"] = new_tp_blob_name
+            if should_update_thumbnail:
+                kwargs["thumbnail_photo"] = new_tp_blob_name
 
-                kwargs["photos"] = kept_photos_blob_names + new_photos_blob_names
+            kwargs["photos"] = kept_photos_blob_names + new_photos_blob_names
 
 
-                db.stallions.update_one({
+            db.stallions.update_one(
+                {
                     "_id": stallion_in_db["_id"]
                 },
                 {
@@ -606,32 +634,38 @@ async def update_stallion_photos(
                         **kwargs,
                         "last_update_timestamp": datetime.now()
                     }
-                })
+                },
+                session=session
+            )
 
-                # delete previous files from object storage
-                if should_update_thumbnail:
-                    old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
-                    # thumbnail blob name is still the old one in stallion_in_db dictionnary variable value
-                removed_photos_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in removed_photos_blob_names]
+            # delete previous files from object storage
+            if should_update_thumbnail:
+                old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
+                # thumbnail blob name is still the old one in stallion_in_db dictionnary variable value
+            removed_photos_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in removed_photos_blob_names]
 
-                if should_update_thumbnail:
-                    old_tp_blob.delete()
-                for blob in removed_photos_blobs:
-                    blob.delete()
+            if should_update_thumbnail:
+                old_tp_blob.delete()
+            for blob in removed_photos_blobs:
+                blob.delete()
 
-                # upload new photos
-                if should_update_thumbnail:
-                    new_tp_blob.upload_from_file(new_thumbnail_photo, rewind=True)
-                for photo_blob, photo_f in zip(new_photos_blobs, new_photos):
-                    photo_blob.upload_from_file(photo_f.file, rewind=True)
+            # upload new photos
+            if should_update_thumbnail:
+                new_tp_blob.upload_from_file(new_thumbnail_photo, rewind=True)
+            for photo_blob, photo_f in zip(new_photos_blobs, new_photos):
+                photo_blob.upload_from_file(photo_f.file, rewind=True)
 
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
+            session.commit_transaction()
 
-            except Exception as exc:
-                logger.error("failed to write object storage: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+        except Exception as exc:
+            session.abort_transaction()
+            logger.error("failed to write object storage: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully updated stallion photos"}
 
@@ -648,38 +682,43 @@ async def delete_stallion(
         raise HTTPException(status_code=403, detail="only handler can delete stallion")
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.stallions.delete_one({"_id": stallion_in_db["_id"]})
+        session.start_transaction()
+        try:
+            db.stallions.delete_one({"_id": stallion_in_db["_id"]}, session=session)
 
-                db.users.update_many(
-                    {"favorite_stallions": {"$exists": True, "$in": [stallion_in_db["_id"]]}},
-                    {
-                        "$pull": {
-                            "favorite_stallions": stallion_in_db["_id"]
-                        }
+            db.users.update_many(
+                {"favorite_stallions": {"$exists": True, "$in": [stallion_in_db["_id"]]}},
+                {
+                    "$pull": {
+                        "favorite_stallions": stallion_in_db["_id"]
                     }
-                )
+                },
+                session=session
+            )
 
-                if "photos" in stallion_in_db:
-                    old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
-                    old_photo_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in stallion_in_db["photos"]]
+            if "photos" in stallion_in_db:
+                old_tp_blob = stallion_photos_bucket.blob(stallion_in_db["thumbnail_photo"])
+                old_photo_blobs = [stallion_photos_bucket.blob(photo_blob_name) for photo_blob_name in stallion_in_db["photos"]]
 
-                    old_tp_blob.delete()
-                    for blob in old_photo_blobs:
-                        blob.delete()
+                old_tp_blob.delete()
+                for blob in old_photo_blobs:
+                    blob.delete()
 
-                if "verification_file" in stallion_in_db:
-                    vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
-                    vf_blob.delete()
+            if "verification_file" in stallion_in_db:
+                vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
+                vf_blob.delete()
 
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
+            session.commit_transaction()
 
-            except Exception as exc:
-                logger.error("failed to write object storage: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write object storage") from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
+
+        except Exception as exc:
+            session.abort_transaction()
+            logger.error("failed to write object storage: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write object storage") from exc
 
     return {"message": "successfully deleted stallion"}
 

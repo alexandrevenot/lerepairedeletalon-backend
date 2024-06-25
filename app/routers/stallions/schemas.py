@@ -229,3 +229,6 @@ class StallionProfileInformationForFavorite(BaseModel):
 
 class FavoriteStallions(BaseModel):
     favorite_stallions: list[str]
+
+class AvailableStallionBreeds(BaseModel):
+    breeds: list[str]
