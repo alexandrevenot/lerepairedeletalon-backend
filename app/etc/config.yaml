@@ -1,12 +1,8 @@
 # company
 company_name: Le Repaire de l'Étalon
 
-# backend
-host: localhost
-port: 3001
-
 # frontend
-frontend_url: http://localhost:4200
+frontend_url: https://www.lerepairedeletalon.fr
 
 # esignatures
 esignatures_url: https://esignatures.io

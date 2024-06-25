@@ -12,7 +12,13 @@ class DummySession:
         pass
 
     def start_transaction(self):
-        return self
+        pass
+
+    def commit_transaction(self):
+        pass
+
+    def abort_transaction(self):
+        pass
 
 class DummyClient:
     def start_session(self):
@@ -32,3 +38,21 @@ class SMTPDummySession:
 
     def __exit__(self, exc_type, exc_value, traceback):
         pass
+
+def mongomock_session_errors_handler(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except NotImplementedError as exc:
+            if str(exc) != "Mongomock does not handle sessions yet":
+                raise exc
+    return wrapper
+
+def async_mongomock_session_errors_handler(func):
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except NotImplementedError as exc:
+            if str(exc) != "Mongomock does not handle sessions yet":
+                raise exc
+    return wrapper

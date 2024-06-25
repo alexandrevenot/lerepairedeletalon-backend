@@ -49,20 +49,23 @@ async def verify_email_address(query: schemas.VerifyEmailQuery, db = Depends(get
         raise HTTPException(status_code=403, detail='invalid email verifying code')
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.users.update_one(
-                    {'email': document["email"]},
-                    {"$set": {
-                        "email_is_verified": True
-                    }}
-                    )
+        session.start_transaction()
+        try:
+            db.users.update_one(
+                {'email': document["email"]},
+                {"$set": {
+                    "email_is_verified": True
+                }},
+                session=session
+            )
 
-                db.email_verification_codes.delete_one({'code': query.code})
+            db.email_verification_codes.delete_one({'code': query.code}, session=session)
+            session.commit_transaction()
 
-            except PyMongoError as exc:
-                logger.error("failed to read db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to write db') from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to read db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to write db') from exc
 
     return {"message": "successfully verified email"}
 
@@ -72,30 +75,37 @@ async def post_send_email_verification_email(current_user = Depends(get_current_
         raise HTTPException(status_code=400, detail='email already verified for this user')
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.email_verification_codes.delete_one({'email': current_user["email"]})
+        session.start_transaction()
+        try:
+            db.email_verification_codes.delete_one({'email': current_user["email"]}, session=session)
 
-                code = generate_sensitive_action_code(current_user["email"], os.urandom(16).hex())
+            code = generate_sensitive_action_code(current_user["email"], os.urandom(16).hex())
 
-                db.email_verification_codes.insert_one({
+            db.email_verification_codes.insert_one(
+                {
                     "email": current_user["email"],
                     "code": code
-                })
+                },
+                session=session
+            )
 
-                utils.send_action_email(
-                    "email_verification",
-                    f"{current_user['firstname']} {current_user['lastname']}",
-                    code,
-                    current_user["email"]
-                )
-            except PyMongoError as exc:
-                logger.error('failed to write db: %s', traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to write db') from exc
+            utils.send_action_email(
+                "email_verification",
+                f"{current_user['firstname']} {current_user['lastname']}",
+                code,
+                current_user["email"]
+            )
+            session.commit_transaction()
 
-            except smtplib.SMTPException as exc:
-                logger.error('failed to send email verification email: %s', traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error('failed to write db: %s', traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+        except smtplib.SMTPException as exc:
+            session.abort_transaction()
+            logger.error('failed to send email verification email: %s', traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
 
     return {'message': 'successfully sent email verification email'}
 
@@ -111,30 +121,37 @@ async def send_password_update_email(query: schemas.SendPasswordUpdateEmailQuery
         raise HTTPException(status_code=404, detail='user not found')
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.password_update_codes.delete_one({'email': query.email})
+        session.start_transaction()
+        try:
+            db.password_update_codes.delete_one({'email': query.email}, session=session)
 
-                code = generate_sensitive_action_code(query.email, os.urandom(16).hex())
+            code = generate_sensitive_action_code(query.email, os.urandom(16).hex())
 
-                db.password_update_codes.insert_one({
+            db.password_update_codes.insert_one(
+                {
                     "email": query.email,
                     "code": code
-                })
+                },
+                session=session
+            )
 
-                utils.send_action_email(
-                    "password_update",
-                    f"{user_in_db['firstname']} {user_in_db['lastname']}",
-                    code,
-                    query.email
-                )
-            except PyMongoError as exc:
-                logger.error('failed to write db: %s', traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to write db') from exc
+            utils.send_action_email(
+                "password_update",
+                f"{user_in_db['firstname']} {user_in_db['lastname']}",
+                code,
+                query.email
+            )
+            session.commit_transaction()
 
-            except smtplib.SMTPException as exc:
-                logger.error('failed to send password update email: %s', traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to send password update email') from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error('failed to write db: %s', traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+        except smtplib.SMTPException as exc:
+            session.abort_transaction()
+            logger.error('failed to send password update email: %s', traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to send password update email') from exc
 
     return {'message': 'successfully sent password update email'}
 
@@ -150,19 +167,22 @@ async def update_password(query: schemas.UpdatePasswordQuery, db = Depends(get_d
         raise HTTPException(status_code=403, detail='invalid password update code')
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.users.update_one(
-                    {'email': document["email"]},
-                    {"$set": {
-                        "hashedpassword": get_password_hash(query.new_password)
-                    }}
-                )
+        session.start_transaction()
+        try:
+            db.users.update_one(
+                {'email': document["email"]},
+                {"$set": {
+                    "hashedpassword": get_password_hash(query.new_password)
+                }},
+                session=session
+            )
 
-                db.password_update_codes.delete_one({'code': query.code})
+            db.password_update_codes.delete_one({'code': query.code}, session=session)
+            session.commit_transaction()
 
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to write db') from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to write db') from exc
 
     return {"message": "successfully updated password"}

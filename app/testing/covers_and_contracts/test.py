@@ -9,7 +9,7 @@ from bson.objectid import ObjectId
 from fastapi.testclient import TestClient
 from freezegun import freeze_time
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, async_mongomock_session_errors_handler
 import routers.auth.router as auth_router
 import routers.stallions.router as stallions_router
 import routers.stallions.utils as stallions_utils
@@ -57,6 +57,11 @@ server.include_router(stallion_owners_router.router)
 client = TestClient(server)
 
 class CoversTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.vf = open('/lerepairedeletalon/server/app/testing/stallions/verification_file.png', 'rb')
+        self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
+
+    @async_mongomock_session_errors_handler
     async def test(self):
         # register a new user
         response = client.post('/auth/register', json={
@@ -78,9 +83,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         access_token = response.json()["accessToken"]
 
         owner_headers = {"Authorization": f"Bearer {access_token}"}
-
-        self.vf = open('/lerepairedeletalon/server/app/testing/stallions/verification_file.png', 'rb')
-        self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
 
         # add a stallion owner
         query = {

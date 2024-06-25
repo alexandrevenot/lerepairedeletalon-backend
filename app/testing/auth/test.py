@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, mongomock_session_errors_handler
 import routers.auth.router as auth_router
 
 server = FastAPI()
@@ -18,6 +18,7 @@ server.include_router(auth_router.router)
 client = TestClient(server)
 
 class AuthTest(unittest.TestCase):
+    @mongomock_session_errors_handler
     def test(self):
         # wrong json
         response = client.post('/auth/register', json={"ounga": "bounga"})

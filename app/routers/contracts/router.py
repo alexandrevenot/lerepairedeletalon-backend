@@ -94,30 +94,33 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
         raise HTTPException(status_code=500, detail="failed to create and fill up contract") from exc
 
     with db_client.start_session() as session:
-        with session.start_transaction():
+        session.start_transaction()
+        try:
             await covers_utils.step_forward_cover(cover_in_db, "signingstarted", db, logger)
-
-            try:
-                assert returned_json["data"]["contract"]["signers"][0]["email"] == buyer_in_db["email"]
-                assert returned_json["data"]["contract"]["signers"][1]["email"] == seller_in_db["email"]
-                db.covers.update_one(
-                    {"_id": cover_in_db["_id"]},
-                    {
-                        "$set": {
-                            "contract_id": returned_json["data"]["contract"]["id"],
-                            "sign_page_urls": {
-                                str(buyer_in_db["_id"]): f'{returned_json["data"]["contract"]["signers"][0]["sign_page_url"]}',
-                                str(seller_in_db["_id"]): f'{returned_json["data"]["contract"]["signers"][1]["sign_page_url"]}'
-                            }
+            assert returned_json["data"]["contract"]["signers"][0]["email"] == buyer_in_db["email"]
+            assert returned_json["data"]["contract"]["signers"][1]["email"] == seller_in_db["email"]
+            db.covers.update_one(
+                {"_id": cover_in_db["_id"]},
+                {
+                    "$set": {
+                        "contract_id": returned_json["data"]["contract"]["id"],
+                        "sign_page_urls": {
+                            str(buyer_in_db["_id"]): f'{returned_json["data"]["contract"]["signers"][0]["sign_page_url"]}',
+                            str(seller_in_db["_id"]): f'{returned_json["data"]["contract"]["signers"][1]["sign_page_url"]}'
                         }
                     }
-                )
-            except AssertionError as exc:
-                logger.error("error in signers order or emails: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to create and fill up contract") from exc
-            except PyMongoError as exc:
-                logger.error("failed to write db: %s", traceback.format_exc())
-                raise HTTPException(status_code=500, detail="failed to write db") from exc
+                },
+                session=session
+            )
+            session.commit_transaction()
+        except AssertionError as exc:
+            session.abort_transaction()
+            logger.error("error in signers order or emails: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to create and fill up contract") from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error("failed to write db: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail="failed to write db") from exc
 
     return returned_json["data"]["contract"]["signers"][0]["sign_page_url"]
 

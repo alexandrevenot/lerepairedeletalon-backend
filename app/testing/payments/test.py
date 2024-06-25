@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, SMTPDummySession, get_db_client
+from testing.context import fake_db, get_db, SMTPDummySession, get_db_client, mongomock_session_errors_handler
 import routers.payments.router as payments_router
 import routers.payments.utils as payments_utils
 import routers.auth.router as auth_router
@@ -34,6 +34,7 @@ server.include_router(users_router.router)
 client = TestClient(server)
 
 class PaymentsTest(unittest.TestCase):
+    @mongomock_session_errors_handler
     def test(self):
         subtotal_ht = 200
         fees_coeff = 0.5

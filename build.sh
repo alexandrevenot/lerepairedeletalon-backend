@@ -5,6 +5,7 @@ cp app/main.py app_build/
 cp app/dependencies.py app_build/
 cp app/middleware.py app_build/
 cp app/requirements.txt app_build/
+cp app/prestart.sh app_build/
 cp -r app/routers app_build/
 cp -r app/etc app_build/
 mkdir app_build/logs/

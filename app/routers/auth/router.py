@@ -57,31 +57,37 @@ async def register(user: schemas.RegisterQuery, db = Depends(get_db), db_client 
     }
 
     with db_client.start_session() as session:
-        with session.start_transaction():
-            try:
-                db.users.insert_one(user_to_create)
+        session.start_transaction()
+        try:
+            db.users.insert_one(user_to_create, session=session)
 
-                code = utils.generate_sensitive_action_code(user.email, os.urandom(16).hex())
+            code = utils.generate_sensitive_action_code(user.email, os.urandom(16).hex())
 
-                db.email_verification_codes.insert_one({
+            db.email_verification_codes.insert_one(
+                {
                     "email": user.email,
                     "code": code
-                })
+                },
+                session=session
+            )
 
-                mailing_utils.send_action_email(
-                    "email_verification",
-                    f"{user.firstname} {user.lastname}",
-                    code,
-                    user.email
-                )
+            mailing_utils.send_action_email(
+                "email_verification",
+                f"{user.firstname} {user.lastname}",
+                code,
+                user.email
+            )
+            session.commit_transaction()
 
-            except PyMongoError as exc:
-                logger.error('failed to write db: %s', traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to write db') from exc
+        except PyMongoError as exc:
+            session.abort_transaction()
+            logger.error('failed to write db: %s', traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to write db') from exc
 
-            except smtplib.SMTPException as exc:
-                logger.error('failed to send email verification email: %s', traceback.format_exc())
-                raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
+        except smtplib.SMTPException as exc:
+            session.abort_transaction()
+            logger.error('failed to send email verification email: %s', traceback.format_exc())
+            raise HTTPException(status_code=500, detail='failed to send email verification email') from exc
 
     return {'message': 'successfully registered user'}
 

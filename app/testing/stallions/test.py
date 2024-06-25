@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from bson.objectid import ObjectId
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, mongomock_session_errors_handler
 import routers.auth.router as auth_router
 import routers.stallions.router as stallions_router
 import routers.stallions.utils as stallions_utils
@@ -44,6 +44,13 @@ server.include_router(stallion_owners_router.router)
 client = TestClient(server)
 
 class StallionsTest(unittest.TestCase):
+    def setUp(self):
+        self.vf = open('/lerepairedeletalon/server/app/testing/stallions/verification_file.png', 'rb')
+        self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
+        self.phtl = open('/lerepairedeletalon/server/app/testing/stallions/photo_too_large.jpg', 'rb')
+        self.vftl = open('/lerepairedeletalon/server/app/testing/stallions/verification_file_too_large.pdf', 'rb')
+
+    @mongomock_session_errors_handler
     def test(self):
         # register a new user
         response = client.post('/auth/register', json={
@@ -148,9 +155,6 @@ class StallionsTest(unittest.TestCase):
 
         stallion_id = response.json()["stallion_id"]
 
-        self.vf = open('/lerepairedeletalon/server/app/testing/stallions/verification_file.png', 'rb')
-        self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
-
         files = (
             ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
@@ -171,7 +175,23 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.json()["content"][0]["profile_status"], "to_be_validated")
         self.assertEqual(len(response.json()["content"][0].keys()), 6)
 
+        response = client.get('/stallions/available-stallion-breeds')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['breeds'], [])
+
+        response = client.get('/stallions/available-stallion-production-breeds')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['breeds'], [])
+
         fake_db.stallions.update_one({"_id": ObjectId(stallion_id)}, {"$set": {"profile_status": "visible"}})
+
+        response = client.get('/stallions/available-stallion-breeds')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['breeds'], ["Selle Français"])
+
+        response = client.get('/stallions/available-stallion-production-breeds')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['breeds'], ['Selle Français'])
 
         response = client.get(f'/stallions/stallion/{stallion_id}?mode=profile', headers=headers)
         self.assertEqual(response.status_code, 200)
@@ -502,9 +522,6 @@ class StallionsTest(unittest.TestCase):
         stallion_id = response.json()["stallion_id"]
         self.assertEqual(response.status_code, 200)
 
-        self.phtl = open('/lerepairedeletalon/server/app/testing/stallions/photo_too_large.jpg', 'rb')
-        self.vftl = open('/lerepairedeletalon/server/app/testing/stallions/verification_file_too_large.pdf', 'rb')
-
         files = (
             ("verification_file", ("verification_file.png", self.vftl, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
@@ -772,6 +789,14 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         fake_db.stallions.update_many({},{"$set": {"profile_status": "visible"}})
+
+        response = client.get('/stallions/available-stallion-breeds')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['breeds'], ['Arabe', 'Fjord'])
+
+        response = client.get('/stallions/available-stallion-production-breeds')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['breeds'], ['Arabe', 'Boulonnais', 'Fjord'])
 
         response = client.put(f'/stallions/stallion-profile-status/{bertrand_id}?new_status=hidden', headers=headers)
         self.assertEqual(response.status_code, 200)
