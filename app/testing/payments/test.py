@@ -119,7 +119,8 @@ class PaymentsTest(unittest.TestCase):
             body = {
                 "business_type": "wtf",
                 "account_token": "token",
-                "bank_account_token": "token2"
+                "bank_account_token": "token2",
+                "additional_account_token": "token3"
             }
             response = client.post('/payments/stripe-account', json=body, headers=headers)
             self.assertEqual(response.status_code, 422)
@@ -129,7 +130,8 @@ class PaymentsTest(unittest.TestCase):
             body = {
                 "business_type": "individual",
                 "account_token": "token",
-                "bank_account_token": "token2"
+                "bank_account_token": "token2",
+                "additional_account_token": "token3"
             }
             response = client.post('/payments/stripe-account', json=body, headers=headers)
             self.assertEqual(response.status_code, 409)
@@ -185,7 +187,8 @@ class PaymentsTest(unittest.TestCase):
             body = {
                 "business_type": "individual",
                 "account_token": "token",
-                "bank_account_token": "token2"
+                "bank_account_token": "token2",
+                "additional_account_token": "token3"
             }
             response = client.post('/payments/stripe-account', json=body, headers=headers)
             self.assertEqual(response.status_code, 409)
