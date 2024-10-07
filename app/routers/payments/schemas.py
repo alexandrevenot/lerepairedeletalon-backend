@@ -5,6 +5,7 @@ class CreateStripeAccountQuery(BaseModel):
     business_type: str
     account_token: str
     person_token: str = None
+    additional_account_token: str = None
     bank_account_token: str
 
     @field_validator('business_type')

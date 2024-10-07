@@ -80,20 +80,9 @@ async def create_stripe_account(
             )
             person_id = create_person_response["id"]
 
-            token_creation_response = stripe.Token.create(
-                account={
-                    "company": {
-                        "directors_provided": True,
-                        "owners_provided": True,
-                        "executives_provided": True
-                    }
-                },
-            )
-            update_account_token = token_creation_response["id"]
-
             stripe.Account.modify(
                 account_id,
-                account_token=update_account_token
+                account_token=query.additional_account_token
             )
 
         create_external_account_response = stripe.Account.create_external_account(
