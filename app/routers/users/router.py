@@ -38,7 +38,6 @@ get_user_in_db = UserInDBGetter(logger)
 get_current_user = CurrentUserGetter(logger)
 get_cover_in_db = CoverInDBGetter(logger)
 get_stalllion_photos_bucket = BucketGetter(global_config['stallion_photos_bucket_name'])
-get_admin_files_bucket = BucketGetter(global_config['admin_files_bucket_name'])
 
 # routes
 router = APIRouter(prefix='/users')
@@ -446,8 +445,7 @@ async def delete_account(
     current_user = Depends(get_current_user),
     db = Depends(get_db),
     db_client = Depends(get_db_client),
-    stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
-    admin_files_bucket = Depends(get_admin_files_bucket)
+    stallion_photos_bucket = Depends(get_stalllion_photos_bucket)
 ):
     with db_client.start_session() as session:
         session.start_transaction()
@@ -492,10 +490,6 @@ async def delete_account(
                     old_tp_blob.delete()
                     for blob in old_photo_blobs:
                         blob.delete()
-
-                if "verification_file" in stallion_in_db:
-                    vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
-                    vf_blob.delete()
 
             db.users.delete_one({"_id": current_user["_id"]}, session=session)
             session.commit_transaction()

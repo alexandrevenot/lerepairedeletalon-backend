@@ -1,4 +1,5 @@
 import yaml
+
 import stripe
 
 import routers.payments.schemas as schemas
@@ -60,3 +61,18 @@ def calculate_corresponding_subtotal(
     n = required_price - fees_offset * (1 + TVA_coeff_HT)
     d = 1 + TVA_cover_coeff_HT + fees_coeff * (1 + TVA_coeff_HT)
     return n/d
+
+def apply_discounts_on_fees(checkout: schemas.PriceWithFees, buyer_in_db: dict, seller_in_db: dict) -> int:
+    if seller_in_db["email"] == "harasdebellaly@gmail.com":
+        return 0
+
+    if buyer_in_db["email"] == "harasdebellaly@gmail.com":
+        return 0
+
+    return int(checkout.service_fees * 100)
+
+def apply_discounts_on_total(checkout: schemas.PriceWithFees, buyer_in_db: dict) -> int:
+    if buyer_in_db["email"] == "harasdebellaly@gmail.com":
+        return int(checkout.subtotal * 100)
+
+    return int(checkout.total * 100)

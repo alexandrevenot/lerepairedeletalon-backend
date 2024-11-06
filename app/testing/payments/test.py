@@ -19,8 +19,6 @@ server.dependency_overrides[payments_router.get_db] = get_db
 server.dependency_overrides[auth_router.get_db] = get_db
 server.dependency_overrides[users_router.get_db] = get_db
 
-server.dependency_overrides[users_router.get_admin_files_bucket] = lambda: unittest.mock.Mock()
-
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_cover_in_db] = lambda: unittest.mock.Mock()

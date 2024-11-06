@@ -33,7 +33,6 @@ stallion_photos_bucket_mock = unittest.mock.Mock()
 stallion_photos_bucket_mock.blob.return_value = fake_blob
 
 server.dependency_overrides[stallions_router.get_stalllion_photos_bucket] = lambda: stallion_photos_bucket_mock
-server.dependency_overrides[stallions_router.get_admin_files_bucket] = lambda: unittest.mock.Mock()
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
 
 
@@ -45,10 +44,8 @@ client = TestClient(server)
 
 class StallionsTest(unittest.TestCase):
     def setUp(self):
-        self.vf = open('/lerepairedeletalon/server/app/testing/stallions/verification_file.png', 'rb')
         self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
         self.phtl = open('/lerepairedeletalon/server/app/testing/stallions/photo_too_large.jpg', 'rb')
-        self.vftl = open('/lerepairedeletalon/server/app/testing/stallions/verification_file_too_large.pdf', 'rb')
 
     @mongomock_session_errors_handler
     def test(self):
@@ -156,7 +153,6 @@ class StallionsTest(unittest.TestCase):
         stallion_id = response.json()["stallion_id"]
 
         files = (
-            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
             ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
@@ -523,7 +519,6 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         files = (
-            ("verification_file", ("verification_file.png", self.vftl, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
             ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
@@ -531,7 +526,6 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
     
         files = (
-            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
             ("photos", ("photo2.jpg", self.phtl, "image/jpg"))
         )
@@ -560,7 +554,6 @@ class StallionsTest(unittest.TestCase):
         other_headers = {"Authorization": f"Bearer {access_token}"}
 
         files = (
-            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
             ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
@@ -689,7 +682,6 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         joris_id = response.json()["stallion_id"]
         files = (
-            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
             ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
@@ -1200,9 +1192,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(response.json()["favorite_stallions"], [first_stallion_id])
 
     def tearDown(self):
-        self.vf.close()
         self.ph.close()
-        self.vftl.close()
         self.phtl.close()
 
 

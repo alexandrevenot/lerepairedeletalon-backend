@@ -82,8 +82,7 @@ async def get_stallion_profile(stallion_in_db = Depends(get_stallion_in_db), _ =
         'dep_name',
         'reg_name',
         'profile_status',
-        'thumbnail_photo',
-        'verification_file'
+        'thumbnail_photo'
     ]
 
     fields_to_be_serialized = [

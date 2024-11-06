@@ -40,7 +40,6 @@ logger.info('Logger initialized')
 get_current_user = CurrentUserGetter(logger)
 get_stallion_in_db = StallionInDBGetter(logger)
 get_stalllion_photos_bucket = BucketGetter(global_config['stallion_photos_bucket_name'])
-get_admin_files_bucket = BucketGetter(global_config['admin_files_bucket_name'])
 
 # routes
 router = APIRouter(prefix='/stallions')
@@ -280,7 +279,6 @@ async def register_new_stallion(
     editable_fields_body: schemas.EditableStallionFields,
     user_id = Depends(get_current_user_id),
     _1 = Depends(get_stalllion_photos_bucket),
-    _2 = Depends(get_admin_files_bucket), # to check that it works before calling POST /stallion-files
     db = Depends(get_db)
 ):
     if editable_fields_body.stallion_owner_id == 'Moi':
@@ -366,30 +364,21 @@ async def register_new_stallion(
 
 @router.post('/stallion-files/{stallion_id}')
 async def register_new_stallion_files(
-    verification_file: Annotated[UploadFile, File()],
     photos: Annotated[list[UploadFile], File()],
     stallion_in_db = Depends(get_stallion_in_db),
     user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
-    admin_files_bucket = Depends(get_admin_files_bucket),
     db_client = Depends(get_db_client)
 ):
     if user_id != stallion_in_db["handler_id"]:
         raise HTTPException(status_code=403, detail="only handler can post stallion files")
 
-    if "photos" in stallion_in_db or "verification_file" in stallion_in_db:
+    if "photos" in stallion_in_db:
         raise HTTPException(status_code=403, detail="can post only once on this route")
 
     if not 1 <= len(photos) <= 5:
         raise HTTPException(status_code=422, detail="there must be between 1 and 5 photos")
-
-    if verification_file.content_type not in config['allowed_verification_file_content_types']:
-        print(verification_file.content_type)
-        raise HTTPException(status_code=422, detail="verification file type not allowed")
-
-    if verification_file.size > config['verification_file_max_size']:
-        raise HTTPException(status_code=422, detail="verification_file is too large")
 
     for photo_f in photos:
         if photo_f.content_type not in config['allowed_photos_content_types']:
@@ -405,10 +394,6 @@ async def register_new_stallion_files(
     except Exception as exc:
         logger.error("failed to process photos: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to process photos") from exc
-
-    vf_blob_name = str(uuid.uuid4()) + '.' + verification_file.content_type.split('/')[1]
-    vf_blob = admin_files_bucket.blob(vf_blob_name)
-    vf_blob.content_type = verification_file.content_type
 
     tp_blob_name = str(uuid.uuid4()) + '.' + tp_content_type
     tp_blob = stallion_photos_bucket.blob(tp_blob_name)
@@ -432,7 +417,6 @@ async def register_new_stallion_files(
                 },
                 {
                     "$set": {
-                        "verification_file": vf_blob_name,
                         "thumbnail_photo": tp_blob_name,
                         "photos": photos_blob_names,
                         "last_update_timestamp": datetime.now()
@@ -441,7 +425,6 @@ async def register_new_stallion_files(
                 session=session
             )
 
-            vf_blob.upload_from_file(verification_file.file, rewind=True)
             tp_blob.upload_from_file(thumbnail_photo, rewind=True)
 
             for photo_blob, photo_f in zip(photo_blobs, photos):
@@ -675,9 +658,8 @@ async def delete_stallion(
     user_id = Depends(get_current_user_id),
     db = Depends(get_db),
     db_client = Depends(get_db_client),
-    stallion_photos_bucket = Depends(get_stalllion_photos_bucket),
-    admin_files_bucket = Depends(get_admin_files_bucket)
-    ):
+    stallion_photos_bucket = Depends(get_stalllion_photos_bucket)
+):
     if user_id != stallion_in_db["handler_id"]:
         raise HTTPException(status_code=403, detail="only handler can delete stallion")
 
@@ -703,10 +685,6 @@ async def delete_stallion(
                 old_tp_blob.delete()
                 for blob in old_photo_blobs:
                     blob.delete()
-
-            if "verification_file" in stallion_in_db:
-                vf_blob = admin_files_bucket.blob(stallion_in_db["verification_file"])
-                vf_blob.delete()
 
             session.commit_transaction()
 
