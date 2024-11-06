@@ -1,12 +1,5 @@
-verification_file_max_size: 10485760 #10Mo
 photo_max_size: 4194304 #4Mo
 photo_low_res_width: 720 #pixels
-
-allowed_verification_file_content_types:
-  - image/jpeg
-  - image/jpg
-  - image/png
-  - application/pdf
 
 allowed_photos_content_types:
   - image/jpeg

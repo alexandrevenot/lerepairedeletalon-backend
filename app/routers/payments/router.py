@@ -11,7 +11,8 @@ import routers.payments.utils as utils
 import routers.covers.utils as covers_utils
 import routers.users.utils as users_utils
 
-from dependencies import CurrentUserGetter, get_db, CoverInDBGetter, get_user_from_object_id
+from dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
+    get_user_from_object_id, get_db_client
 
 # configs
 global_config = utils.load_global_config()
@@ -362,6 +363,7 @@ async def get_checkout(
     # build new session if needed
     if session is None:
         seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
+        buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
 
         try:
             session = stripe.checkout.Session.create(
@@ -370,13 +372,13 @@ async def get_checkout(
                     "price_data": {
                         "currency": "eur",
                         "product_data": {"name": product_name},
-                        "unit_amount": int(checkout.total * 100),
+                        "unit_amount": utils.apply_discounts_on_total(checkout, buyer_in_db),
                         "tax_behavior": "inclusive"
                     },
                     "quantity": 1
                 }],
                 payment_intent_data={
-                    "application_fee_amount": 0 if seller_in_db["email"] == "harasdebellaly@gmail.com" else int(checkout.service_fees * 100),
+                    "application_fee_amount": utils.apply_discounts_on_fees(checkout, buyer_in_db, seller_in_db),
                     "transfer_data": {"destination": seller_in_db["stripe_account"]["account"]["id"]}
                 },
                 payment_method_options={
@@ -417,7 +419,11 @@ async def get_checkout(
     return schemas.Checkout(client_secret=session.client_secret)
 
 @router.post('/stripe-checkout-webhook')
-async def handle_stripe_checkout_webhook(request: Request, db = Depends(get_db)):
+async def handle_stripe_checkout_webhook(
+    request: Request,
+    db = Depends(get_db),
+    db_client = Depends(get_db_client)
+):
     data = await request.body()
     try:
         stripe_signature = request.headers['stripe-signature']
@@ -457,10 +463,39 @@ async def handle_stripe_checkout_webhook(request: Request, db = Depends(get_db))
         else:
             return {"message": "successfully received webhook"}
 
-        await covers_utils.step_forward_cover(cover_in_db, new_status, db, logger)
+        with db_client.start_session() as session:
+            session.start_transaction()
+            try:
+                await covers_utils.step_forward_cover(cover_in_db, new_status, db, logger)
 
-        seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
-        buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
+                seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
+                buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
+            except HTTPException as exc:
+                session.abort_transaction()
+                raise exc
+
+            try:
+                first_cover_sold_id = seller_in_db["first_cover_sold_id"]
+            except KeyError:
+                first_cover_sold_id = None
+
+            if first_cover_sold_id is None or first_cover_sold_id == cover_in_db["_id"]:
+                # notify me that I should make cover free of fees
+                if first_cover_sold_id is None:
+                    try:
+                        db.users.update_one(
+                            {"_id": seller_in_db["_id"]},
+                            {
+                                "$set": {
+                                    "first_cover_sold_id": cover_in_db["_id"]
+                                }
+                            }
+                        )
+                    except PyMongoError as exc:
+                        session.abort_transaction()
+                        logger.error("failed to write db: %s", traceback.format_exc())
+                        raise HTTPException(status_code=500, detail='failed to write db') from exc
+
         users_utils.notify_user(new_status, cover_in_db["_id"], "seller", seller_in_db, buyer_in_db, db, logger)
 
     return {"message": "successfully received webhook"}

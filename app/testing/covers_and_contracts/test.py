@@ -42,7 +42,6 @@ server.dependency_overrides[contracts_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_db_client] = get_db_client
 
 server.dependency_overrides[stallions_router.get_stalllion_photos_bucket] = lambda: unittest.mock.Mock()
-server.dependency_overrides[stallions_router.get_admin_files_bucket] = lambda: unittest.mock.Mock()
 
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
 
@@ -58,7 +57,6 @@ client = TestClient(server)
 
 class CoversTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.vf = open('/lerepairedeletalon/server/app/testing/stallions/verification_file.png', 'rb')
         self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
 
     @async_mongomock_session_errors_handler
@@ -170,7 +168,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         stallion_id = response.json()["stallion_id"]
 
         files = (
-            ("verification_file", ("verification_file.png", self.vf, "image/png")),
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
             ("photos", ("photo2.jpg", self.ph, "image/jpg"))
         )
@@ -1576,7 +1573,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["owner_has_other_reviews"], False)
 
     def tearDown(self):
-        self.vf.close()
         self.ph.close()
 
 class ArrivalDate(unittest.TestCase):

@@ -16,7 +16,6 @@ server.dependency_overrides[users_router.get_db] = get_db
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_db_client] = get_db_client
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
-server.dependency_overrides[users_router.get_admin_files_bucket] = lambda: unittest.mock.Mock()
 
 server.include_router(auth_router.router)
 server.include_router(users_router.router)
