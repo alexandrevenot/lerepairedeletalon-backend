@@ -145,11 +145,9 @@ class EditableStallionFields(BaseModel):
     @field_validator('production_breeds')
     @classmethod
     def production_breeds_validator(cls, value):
-        if sorted(value) != sorted(list(set(value))):
-            raise HTTPException(status_code=422, detail='atleast 1 production breed is duplicated')
         if len(value) == 0:
             raise HTTPException(status_code=422, detail='production breeds cannot be empty')
-        return value
+        return list(set(value))
 
     @field_validator('pedigree')
     @classmethod
