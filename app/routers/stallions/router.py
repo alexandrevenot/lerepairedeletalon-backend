@@ -377,8 +377,8 @@ async def register_new_stallion_files(
     if "photos" in stallion_in_db:
         raise HTTPException(status_code=403, detail="can post only once on this route")
 
-    if not 1 <= len(photos) <= 5:
-        raise HTTPException(status_code=422, detail="there must be between 1 and 5 photos")
+    if len(photos) < 1:
+        raise HTTPException(status_code=422, detail="there must be atleast 1 photo")
 
     for photo_f in photos:
         if photo_f.content_type not in config['allowed_photos_content_types']:
@@ -540,8 +540,8 @@ async def update_stallion_photos(
     or any(index >= len(stallion_in_db["photos"]) or index < 0 for index in kept_photos):
         raise HTTPException(status_code=422, detail="invalid kept_photos")
 
-    if not 1 <= len(new_photos) + len(kept_photos) <= 5:
-        raise HTTPException(status_code=422, detail="there must remain between 1 and 5 photos")
+    if len(new_photos) + len(kept_photos) < 1:
+        raise HTTPException(status_code=422, detail="there must remain atleast 1 photo")
 
     for photo_f in new_photos:
         if photo_f.content_type not in config['allowed_photos_content_types']:
