@@ -96,7 +96,7 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
     with db_client.start_session() as session:
         session.start_transaction()
         try:
-            await covers_utils.step_forward_cover(cover_in_db, "signingstarted", db, logger)
+            await covers_utils.step_forward_cover(cover_in_db, "signingstarted", db, logger, session)
             assert returned_json["data"]["contract"]["signers"][0]["email"] == buyer_in_db["email"]
             assert returned_json["data"]["contract"]["signers"][1]["email"] == seller_in_db["email"]
             db.covers.update_one(

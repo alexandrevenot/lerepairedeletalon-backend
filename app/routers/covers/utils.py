@@ -19,7 +19,7 @@ def check_status_graph(status: str, next_status: str, pov: str):
     graph = config[f'{pov}_status_graph']
     return graph[status] is not None and next_status in graph[status]
 
-async def step_forward_cover(cover_in_db: dict, next_status: str, db, logger):
+async def step_forward_cover(cover_in_db: dict, next_status: str, db, logger, session=None):
     cursor_index = cover_in_db["timestamps"]["cursor_index"]
     timestamps_list = cover_in_db["timestamps"]["timestamps_list"]
 
@@ -36,7 +36,7 @@ async def step_forward_cover(cover_in_db: dict, next_status: str, db, logger):
                 'timestamps' + '.' + 'timestamps_list': timestamps_list
                 }
             }
-        db.covers.update_one({"_id": cover_in_db["_id"]}, update)
+        db.covers.update_one({"_id": cover_in_db["_id"]}, update, session=session)
     except PyMongoError as exc:
         logger.error("failed to write db: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to write db") from exc

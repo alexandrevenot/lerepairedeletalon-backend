@@ -466,7 +466,7 @@ async def handle_stripe_checkout_webhook(
         with db_client.start_session() as session:
             session.start_transaction()
             try:
-                await covers_utils.step_forward_cover(cover_in_db, new_status, db, logger)
+                await covers_utils.step_forward_cover(cover_in_db, new_status, db, logger, session)
 
                 seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
                 buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
@@ -489,12 +489,15 @@ async def handle_stripe_checkout_webhook(
                                 "$set": {
                                     "first_cover_sold_id": cover_in_db["_id"]
                                 }
-                            }
+                            },
+                            session=session
                         )
                     except PyMongoError as exc:
                         session.abort_transaction()
                         logger.error("failed to write db: %s", traceback.format_exc())
                         raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+            session.commit_transaction()
 
         users_utils.notify_user(new_status, cover_in_db["_id"], "seller", seller_in_db, buyer_in_db, db, logger)
 
