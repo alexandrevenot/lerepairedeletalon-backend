@@ -1,6 +1,6 @@
 import unittest
-import os
 import datetime
+from unittest.mock import Mock
 
 from unittest.mock import Mock, MagicMock, AsyncMock, patch
 from aioresponses import aioresponses
@@ -9,7 +9,7 @@ from bson.objectid import ObjectId
 from fastapi.testclient import TestClient
 from freezegun import freeze_time
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, async_mongomock_session_errors_handler
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
 import routers.auth.router as auth_router
 import routers.stallions.router as stallions_router
 import routers.stallions.utils as stallions_utils
@@ -44,6 +44,10 @@ server.dependency_overrides[users_router.get_db_client] = get_db_client
 server.dependency_overrides[stallions_router.get_stalllion_photos_bucket] = lambda: unittest.mock.Mock()
 
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
+auth_router.monitoring_tools.send_telegram_message = Mock()
+stallions_router.monitoring_tools.send_telegram_message = Mock()
+covers_router.monitoring_tools.send_telegram_message = Mock()
+contracts_router.monitoring_tools.send_telegram_message = AsyncMock()
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
@@ -59,7 +63,6 @@ class CoversTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
 
-    @async_mongomock_session_errors_handler
     async def test(self):
         # register a new user
         response = client.post('/auth/register', json={

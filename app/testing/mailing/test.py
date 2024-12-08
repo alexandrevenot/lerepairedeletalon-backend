@@ -1,10 +1,10 @@
 import unittest
-import os
+from unittest.mock import Mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, mongomock_session_errors_handler
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
 import routers.auth.router as auth_router
 import routers.mailing.router as mailing_router
 from routers.auth.utils import verify_password
@@ -17,6 +17,7 @@ server.dependency_overrides[mailing_router.get_db] = get_db
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 server.dependency_overrides[mailing_router.get_db_client] = get_db_client
 mailing_router.utils.smtplib.SMTP = SMTPDummySession
+auth_router.monitoring_tools.send_telegram_message = Mock()
 
 server.include_router(auth_router.router)
 server.include_router(mailing_router.router)
@@ -24,7 +25,6 @@ server.include_router(mailing_router.router)
 client = TestClient(server)
 
 class MailingTest(unittest.TestCase):
-    @mongomock_session_errors_handler
     def test(self):
         # register a new user
         response = client.post('/auth/register', json={

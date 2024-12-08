@@ -6,13 +6,14 @@ import traceback
 from typing import Annotated
 from datetime import datetime
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, BackgroundTasks
 from pymongo.errors import PyMongoError
 
 import routers.stallions.utils as utils
 import routers.stallions.schemas as schemas
 import routers.geoloc.utils as geoloc_utils
 import routers.payments.utils as payments_utils
+import monitoring.tools as monitoring_tools
 
 from dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
     get_db_client, BucketGetter, get_current_user_id, get_stallion_owner_in_db
@@ -21,6 +22,7 @@ from dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
 global_config = utils.load_global_config()
 config = utils.load_config()
 payments_config = payments_utils.load_config()
+monitoring_config = monitoring_tools.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -365,6 +367,7 @@ async def register_new_stallion(
 @router.post('/stallion-files/{stallion_id}')
 async def register_new_stallion_files(
     photos: Annotated[list[UploadFile], File()],
+    background_tasks: BackgroundTasks,
     stallion_in_db = Depends(get_stallion_in_db),
     user_id = Depends(get_current_user_id),
     db = Depends(get_db),
@@ -430,6 +433,16 @@ async def register_new_stallion_files(
             for photo_blob, photo_f in zip(photo_blobs, photos):
                 photo_blob.upload_from_file(photo_f.file, rewind=True)
             session.commit_transaction()
+
+            message = f"Nouvel étalon à valider\n*ID*: {stallion_in_db['_id']}"
+            message += f"\n*Nom*: {stallion_in_db['name']}"
+            message += f"\n*Gérant*: {stallion_in_db['handler_id']}"
+            background_tasks.add_task(
+                monitoring_tools.send_telegram_message,
+                message,
+                monitoring_config["telegram_api_key"],
+                logger
+            )
 
         except PyMongoError as exc:
             session.abort_transaction()
