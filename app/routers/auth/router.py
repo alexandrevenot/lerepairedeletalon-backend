@@ -4,13 +4,13 @@ import logging.handlers
 import traceback
 import smtplib
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pymongo.errors import PyMongoError
 
 import routers.auth.utils as utils
 import routers.auth.schemas as schemas
-
 import routers.mailing.utils as mailing_utils
+import monitoring.tools as monitoring_tools
 
 from dependencies import get_db, get_db_client
 
@@ -18,6 +18,7 @@ from dependencies import get_db, get_db_client
 global_config = utils.load_global_config()
 config = utils.load_config()
 mailing_config = mailing_utils.load_config()
+monitoring_config = monitoring_tools.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -37,7 +38,12 @@ logger.info('Logger initialized')
 router = APIRouter(prefix='/auth')
 
 @router.post('/register')
-async def register(user: schemas.RegisterQuery, db = Depends(get_db), db_client = Depends(get_db_client)):
+async def register(
+    user: schemas.RegisterQuery,
+    background_tasks: BackgroundTasks,
+    db = Depends(get_db),
+    db_client = Depends(get_db_client)
+):
     try:
         user_in_db = db.users.find_one({'email': user.email})
     except PyMongoError as exc:
@@ -78,6 +84,12 @@ async def register(user: schemas.RegisterQuery, db = Depends(get_db), db_client 
                 user.email
             )
             session.commit_transaction()
+            background_tasks.add_task(
+                monitoring_tools.send_telegram_message,
+                f"Un compte vient d'être créé\n*Prénom*: {user.firstname}\n*Nom*: {user.lastname}",
+                monitoring_config["telegram_api_key"],
+                logger
+            )
 
         except PyMongoError as exc:
             session.abort_transaction()

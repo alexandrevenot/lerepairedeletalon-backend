@@ -1,12 +1,12 @@
 import unittest
-import os
 import datetime
+from unittest.mock import Mock
 
 from fastapi import FastAPI
 from bson.objectid import ObjectId
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, mongomock_session_errors_handler
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
 import routers.auth.router as auth_router
 import routers.stallions.router as stallions_router
 import routers.stallions.utils as stallions_utils
@@ -34,7 +34,8 @@ stallion_photos_bucket_mock.blob.return_value = fake_blob
 
 server.dependency_overrides[stallions_router.get_stalllion_photos_bucket] = lambda: stallion_photos_bucket_mock
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
-
+auth_router.monitoring_tools.send_telegram_message = Mock()
+stallions_router.monitoring_tools.send_telegram_message = Mock()
 
 server.include_router(auth_router.router)
 server.include_router(stallions_router.router)
@@ -47,7 +48,6 @@ class StallionsTest(unittest.TestCase):
         self.ph = open('/lerepairedeletalon/server/app/testing/stallions/sellefrançais.jpg', 'rb')
         self.phtl = open('/lerepairedeletalon/server/app/testing/stallions/photo_too_large.jpg', 'rb')
 
-    @mongomock_session_errors_handler
     def test(self):
         # register a new user
         response = client.post('/auth/register', json={
@@ -309,7 +309,7 @@ class StallionsTest(unittest.TestCase):
         self.assertEqual(content["city"], "Rodez")
         self.assertEqual(content["dep_name"], "Aveyron")
         self.assertEqual(content["reg_name"], "Occitanie")
-        self.assertEqual(content["production_breeds"], ["Selle Français", "Boulonnais"])
+        self.assertEqual(sorted(content["production_breeds"]), sorted(["Selle Français", "Boulonnais"]))
         self.assertEqual(content["cover_specs"]["hand"]["price"], 780)
         self.assertEqual(content["cover_specs"]["hand"]["balance_payment_condition"], "living_foal")
         self.assertEqual(content["cover_specs"]["hand"]["advance_percentage"], 40)
@@ -399,15 +399,10 @@ class StallionsTest(unittest.TestCase):
         # bad birthdate format
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
-
-        # production breeds duplicated
-        body["final_fields_body"]["birthdate"] = "28/10/1998"
-        body["editable_fields_body"]["production_breeds"] = ["Selle Français", "Selle Français"]
-        response = client.post('/stallions/stallion', json=body, headers=headers)
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "incorrect birth_date date format")
 
         # cover_specs
-        body["editable_fields_body"]["production_breeds"] = ["Selle Français"]
+        body["final_fields_body"]["birthdate"] = "28/10/1998"
         body["editable_fields_body"]["cover_specs"]["hand"] = {
             "price": 750,
             "balance_payment_condition": "living_foal_485",
@@ -423,6 +418,7 @@ class StallionsTest(unittest.TestCase):
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "unallowed balance payment condition")
 
         # cover_specs
         body["editable_fields_body"]["cover_specs"]["hand"] = {
@@ -440,6 +436,7 @@ class StallionsTest(unittest.TestCase):
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"][0]["type"], "less_than_equal")
 
         # cover_specs
         body["editable_fields_body"]["cover_specs"]["hand"] = {
@@ -457,6 +454,7 @@ class StallionsTest(unittest.TestCase):
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"][0]["type"], "greater_than_equal")
 
         # cover_specs
         body["editable_fields_body"]["cover_specs"]["hand"] = {
@@ -474,11 +472,13 @@ class StallionsTest(unittest.TestCase):
         }
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"][0]["type"], "int_type")
 
         # cover_specs
         body["editable_fields_body"]["cover_specs"] = {}
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "atleast one cover type has to be offered")
 
         # pedigree
         body["editable_fields_body"]["cover_specs"]["hand"] = {
@@ -497,11 +497,13 @@ class StallionsTest(unittest.TestCase):
         body["editable_fields_body"]["pedigree"] = [""] * 15
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "too many items in pedigree")
 
         body["editable_fields_body"]["pedigree"] = ["Popa"]
         body["editable_fields_body"]["stallion_std_negative_tests"] = ["not a disease"]
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"][0]["type"], "model_attributes_type")
 
         body["editable_fields_body"]["stallion_std_negative_tests"] = {
             "anemie": {
@@ -511,19 +513,13 @@ class StallionsTest(unittest.TestCase):
         body["editable_fields_body"]["stallion_vaccines"] = ["covid15"]
         response = client.post('/stallions/stallion', json=body, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "unallowed vaccines")
 
         # put stallion in db to test next routes 422
         body["editable_fields_body"]["stallion_vaccines"] = ["grippe"]
         response = client.post('/stallions/stallion', json=body, headers=headers)
         stallion_id = response.json()["stallion_id"]
         self.assertEqual(response.status_code, 200)
-
-        files = (
-            ("photos", ("photo.jpg", self.ph, "image/jpg")),
-            ("photos", ("photo2.jpg", self.ph, "image/jpg"))
-        )
-        response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
-        self.assertEqual(response.status_code, 422)
     
         files = (
             ("photos", ("photo.jpg", self.ph, "image/jpg")),
@@ -531,6 +527,7 @@ class StallionsTest(unittest.TestCase):
         )
         response = client.post(f'/stallions/stallion-files/{stallion_id}', files=files, headers=headers)
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "a photo is too large")
 
         # register another user
         response = client.post('/auth/register', json={

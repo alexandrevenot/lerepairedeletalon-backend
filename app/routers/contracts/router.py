@@ -10,6 +10,7 @@ import routers.contracts.utils as utils
 import routers.contracts.schemas as schemas
 import routers.covers.utils as covers_utils
 import routers.users.utils as users_utils
+import monitoring.tools as monitoring_tools
 
 from dependencies import get_db, get_user_from_object_id, CurrentUserGetter, \
     get_db_client, get_current_user_id, CoverInDBGetter, get_stallion_owner_from_object_id
@@ -17,6 +18,7 @@ from dependencies import get_db, get_user_from_object_id, CurrentUserGetter, \
 # configs
 global_config = utils.load_global_config()
 config = utils.load_config()
+monitoring_config = monitoring_tools.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -112,6 +114,10 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
                 },
                 session=session
             )
+            message = f"Une saillie vient de changer de statut\n*ID*: {cover_in_db['_id']}"
+            message += "\n*Nouveau statut*: signingstarted"
+            message += f"\n*Utilisateur source*: {buyer_in_db['firstname']} {buyer_in_db['lastname']}"
+            await monitoring_tools.send_telegram_message(message, monitoring_config["telegram_api_key"], logger)
             session.commit_transaction()
         except AssertionError as exc:
             session.abort_transaction()
@@ -183,10 +189,29 @@ async def manage_esignatures_wehbooks(
         buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
         seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
         background_tasks.add_task(users_utils.notify_user, "buyersigned", cover_in_db["_id"], "seller", seller_in_db, buyer_in_db, db, logger)
+        message = "Un contrat vient d'être signé par l'acheteur"
+        message += f"\n*Saillie*: {cover_in_db['_id']}"
+        message += f"\n*Acheteur*: {buyer_in_db['firstname']} {buyer_in_db['lastname']}"
+        message += f"\n*Vendeur*: {seller_in_db['firstname']} {seller_in_db['lastname']}"
+        background_tasks.add_task(
+            monitoring_tools.send_telegram_message,
+            message,
+            monitoring_config["telegram_api_key"],
+            logger
+        )
     elif cover_in_db["status"] == "buyersigned" and signing_order == "2":
         await covers_utils.step_forward_cover(cover_in_db, "sellersigned", db, logger)
         buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
         seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
         background_tasks.add_task(users_utils.notify_user, "sellersigned", cover_in_db["_id"], "buyer", buyer_in_db, seller_in_db, db, logger)
-
+        message = "Un contrat vient d'être signé par le vendeur"
+        message += f"\n*Saillie*: {cover_in_db['_id']}"
+        message += f"\n*Acheteur*: {buyer_in_db['firstname']} {buyer_in_db['lastname']}"
+        message += f"\n*Vendeur*: {seller_in_db['firstname']} {seller_in_db['lastname']}"
+        background_tasks.add_task(
+            monitoring_tools.send_telegram_message,
+            message,
+            monitoring_config["telegram_api_key"],
+            logger
+        )
     return {"message": "successfully received webhook"}

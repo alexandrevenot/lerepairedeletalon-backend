@@ -3,13 +3,14 @@ import logging.handlers
 import traceback
 
 import stripe
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from pymongo.errors import PyMongoError
 
 import routers.payments.schemas as schemas
 import routers.payments.utils as utils
 import routers.covers.utils as covers_utils
 import routers.users.utils as users_utils
+import monitoring.tools as monitoring_tools
 
 from dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
     get_user_from_object_id, get_db_client
@@ -17,6 +18,7 @@ from dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
 # configs
 global_config = utils.load_global_config()
 config = utils.load_config()
+monitoring_config = monitoring_tools.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -421,6 +423,7 @@ async def get_checkout(
 @router.post('/stripe-checkout-webhook')
 async def handle_stripe_checkout_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     db = Depends(get_db),
     db_client = Depends(get_db_client)
 ):
@@ -480,7 +483,15 @@ async def handle_stripe_checkout_webhook(
                 first_cover_sold_id = None
 
             if first_cover_sold_id is None or first_cover_sold_id == cover_in_db["_id"]:
-                # notify me that I should make cover free of fees
+                message = "Promotion première saillie sans frais pour les vendeurs: "
+                message += f"il faudra rembourser les frais à {seller_in_db['firstname']} {seller_in_db['lastname']} "
+                message += f"pour la saillie {cover_in_db['_id']}"
+                background_tasks.add_task(
+                    monitoring_tools.send_telegram_message,
+                    message,
+                    monitoring_config["telegram_api_key"],
+                    logger
+                )
                 if first_cover_sold_id is None:
                     try:
                         db.users.update_one(
@@ -499,6 +510,16 @@ async def handle_stripe_checkout_webhook(
 
             session.commit_transaction()
 
+        message = f"Un {'acompte' if new_status == 'downpaid' else 'solde'} vient d'être payé"
+        message += f"\n*Saillie*: {cover_in_db['_id']}"
+        message += f"\n*Acheteur*: {buyer_in_db['firstname']} {buyer_in_db['lastname']}"
+        message += f"\n*Vendeur*: {seller_in_db['firstname']} {seller_in_db['lastname']}"
+        background_tasks.add_task(
+            monitoring_tools.send_telegram_message,
+            message,
+            monitoring_config["telegram_api_key"],
+            logger
+        )
         users_utils.notify_user(new_status, cover_in_db["_id"], "seller", seller_in_db, buyer_in_db, db, logger)
 
     return {"message": "successfully received webhook"}

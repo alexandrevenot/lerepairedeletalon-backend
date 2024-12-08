@@ -13,6 +13,7 @@ import routers.payments.utils as payments_utils
 import routers.contracts.utils as contracts_utils
 import routers.stallions.utils as stallions_utils
 import routers.users.utils as users_utils
+import monitoring.tools as monitoring_tools
 
 from dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
 
@@ -22,6 +23,7 @@ config = utils.load_config()
 payments_config = payments_utils.load_config()
 contracts_config = contracts_utils.load_config()
 stallions_config = stallions_utils.load_config()
+monitoring_config = monitoring_tools.load_config()
 
 # logging
 logger = logging.getLogger(__name__)
@@ -192,6 +194,17 @@ async def create_cover(
 
     background_tasks.add_task(users_utils.notify_user, 'requested', result.inserted_id, 'seller', seller_in_db, current_user, db, logger)
 
+    message = f"Une demande de saillie vient d'être faite\n*ID*: {result.inserted_id}"
+    message += f"\n*Acheteur*: {current_user['firstname']} {current_user['lastname']}"
+    message += f"\n*Vendeur*: {seller_in_db['firstname']} {seller_in_db['lastname']}"
+    message += f"\n*Étalon*: {stallion_in_db['name']}"
+    background_tasks.add_task(
+        monitoring_tools.send_telegram_message,
+        message,
+        monitoring_config["telegram_api_key"],
+        logger
+    )
+
     return {"message": "cover registered successfully"}
 
 @router.post('/step-forward-cover/{cover_id}')
@@ -228,6 +241,16 @@ async def manually_step_forward_cover(
         await get_user_from_object_id(cover_in_db[f"{destination_pov}_id"], db, logger),
         current_user,
         db,
+        logger
+    )
+
+    message = f"Une saillie vient de changer de statut\n*ID*: {cover_in_db['_id']}"
+    message += f"\n*Nouveau statut*: {query.next_status}"
+    message += f"\n*Utilisateur source*: {current_user['firstname']} {current_user['lastname']}"
+    background_tasks.add_task(
+        monitoring_tools.send_telegram_message,
+        message,
+        monitoring_config["telegram_api_key"],
         logger
     )
 

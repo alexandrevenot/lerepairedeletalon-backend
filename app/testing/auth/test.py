@@ -1,10 +1,10 @@
 import unittest
-import os
+from unittest.mock import Mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, get_db_client, SMTPDummySession, mongomock_session_errors_handler
+from testing.context import fake_db, get_db, get_db_client, SMTPDummySession
 import routers.auth.router as auth_router
 
 server = FastAPI()
@@ -12,13 +12,13 @@ server = FastAPI()
 server.dependency_overrides[auth_router.get_db] = get_db
 server.dependency_overrides[auth_router.get_db_client] = get_db_client
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
+auth_router.monitoring_tools.send_telegram_message = Mock()
 
 server.include_router(auth_router.router)
 
 client = TestClient(server)
 
 class AuthTest(unittest.TestCase):
-    @mongomock_session_errors_handler
     def test(self):
         # wrong json
         response = client.post('/auth/register', json={"ounga": "bounga"})

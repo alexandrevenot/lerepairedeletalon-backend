@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from testing.context import fake_db, get_db, SMTPDummySession, get_db_client, mongomock_session_errors_handler
+from testing.context import fake_db, get_db, SMTPDummySession, get_db_client
 import routers.payments.router as payments_router
 import routers.payments.utils as payments_utils
 import routers.auth.router as auth_router
@@ -24,6 +24,8 @@ server.dependency_overrides[users_router.get_db_client] = get_db_client
 server.dependency_overrides[users_router.get_cover_in_db] = lambda: unittest.mock.Mock()
 
 auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
+auth_router.monitoring_tools.send_telegram_message = Mock()
+payments_router.monitoring_tools.send_telegram_message = Mock()
 
 server.include_router(payments_router.router)
 server.include_router(auth_router.router)
@@ -32,7 +34,6 @@ server.include_router(users_router.router)
 client = TestClient(server)
 
 class PaymentsTest(unittest.TestCase):
-    @mongomock_session_errors_handler
     def test(self):
         subtotal_ht = 200
         fees_coeff = 0.5
