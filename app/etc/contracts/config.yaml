@@ -5,7 +5,7 @@ contracts_templates_ids:
   hand: 0aa1fe35-9342-4381-b2f5-21c1e03c31eb
 
 esignatures_contracts_api_url: https://esignatures.io/api/contracts
-signature_request_links_expiration_delay_hours: 168 # one week
+signature_request_links_expiration_delay_hours: 8760 # one year
 signature_request_delivery_methods: []
 signed_document_delivery_method: email
 multi_factor_authentications:
