@@ -36,8 +36,7 @@ def get_displayed_price(document: dict, min_price: float, max_price: float, cove
     else:
         value = min(value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and value["price"] <= max_price and key in cover_types)
 
-    cover_payment_details = payments_utils.get_cover_payment_details(value, payments_config['fees_coeff'], payments_config['fees_offset'])
-    return payments_utils.calculate_checkout(value, cover_payment_details.fees_ht, payments_config['TVA_coeff_HT'], payments_config['TVA_cover_coeff_HT']).total
+    return payments_utils.calculate_checkout(value, payments_config['fees_coeff']).total
 
 def calculate_age(birthdate: datetime) -> int:
     today = date.today()

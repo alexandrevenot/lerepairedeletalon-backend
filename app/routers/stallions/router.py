@@ -83,20 +83,14 @@ async def search(
     if min_price is not None:
         min_price = payments_utils.calculate_corresponding_subtotal(
             min_price,
-            payments_config['fees_coeff'],
-            payments_config['fees_offset'],
-            payments_config['TVA_coeff_HT'],
-            payments_config['TVA_cover_coeff_HT']
+            payments_config['fees_coeff']
         )
         price_query["$gte"] = min_price
 
     if max_price is not None:
         max_price = payments_utils.calculate_corresponding_subtotal(
             max_price,
-            payments_config['fees_coeff'],
-            payments_config['fees_offset'],
-            payments_config['TVA_coeff_HT'],
-            payments_config['TVA_cover_coeff_HT']
+            payments_config['fees_coeff']
         )
         price_query["$lte"] = max_price
 
