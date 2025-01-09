@@ -238,19 +238,8 @@ async def create_and_send_contract(
     })
 
     placeholder_fields.append({
-        "api_key": "total_ht",
-        "value": cover_document["subtotal_ht"] + cover_document["fees_ht"]
-    })
-
-    total_checkout = payments_utils.calculate_checkout(
-        cover_document["subtotal_ht"],
-        cover_document["fees_ht"],
-        payments_config["TVA_coeff_HT"],
-        payments_config["TVA_cover_coeff_HT"]
-    )
-    placeholder_fields.append({
         "api_key": "total_ttc",
-        "value": total_checkout.total
+        "value": cover_document["total"]
     })
 
     placeholder_fields.append({
@@ -258,23 +247,12 @@ async def create_and_send_contract(
         "value": cover_document["cover_specs"]["advance_percentage"]
     })
 
-    advance_subtotal_ht = payments_utils.calculate_advance(cover_document["subtotal_ht"], cover_document["cover_specs"]["advance_percentage"])
-    advance_fees_ht = payments_utils.calculate_advance(cover_document["fees_ht"], cover_document["cover_specs"]["advance_percentage"])
-    advance_checkout = payments_utils.calculate_checkout(
-        advance_subtotal_ht,
-        advance_fees_ht,
-        payments_config["TVA_coeff_HT"],
-        payments_config["TVA_cover_coeff_HT"]
-    )
-
-    placeholder_fields.append({
-        "api_key": "advance_ht",
-        "value": advance_subtotal_ht + advance_fees_ht
-    })
+    advance_subtotal = payments_utils.calculate_advance(cover_document["subtotal"], cover_document["cover_specs"]["advance_percentage"])
+    advance_fees = payments_utils.calculate_advance(cover_document["fees"], cover_document["cover_specs"]["advance_percentage"])
 
     placeholder_fields.append({
         "api_key": "advance_ttc",
-        "value": advance_checkout.total
+        "value": advance_subtotal + advance_fees
     })
 
     placeholder_fields.append({

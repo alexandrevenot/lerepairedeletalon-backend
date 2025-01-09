@@ -94,7 +94,7 @@ async def create_cover(
         if cover_in_db["status"] not in ["denied", "downpaid", "fullypaid"]:
             raise HTTPException(status_code=400, detail="cover already exists")
 
-    # fetching price
+    # fetching stallion data
     try:
         stallion_in_db = db.stallions.find_one(
             {
@@ -146,17 +146,15 @@ async def create_cover(
         } for step in config["status"][:-1]]
     }
 
-    cover_payment_details = payments_utils.get_cover_payment_details(
-        stallion_in_db["cover_specs"][cover.cover_type]["price"],
-        payments_config["fees_coeff"],
-        payments_config["fees_offset"]
-    )
-
     ## insert payment details
-    del stallion_in_db["cover_specs"][cover.cover_type]["price"]
-    new_document.update(cover_payment_details.model_dump())
+    checkout = payments_utils.calculate_checkout(
+        stallion_in_db["cover_specs"][cover.cover_type]["price"],
+        payments_config["fees_coeff"]
+    )
+    new_document.update(checkout.model_dump())
 
     ## insert cover type details
+    del stallion_in_db["cover_specs"][cover.cover_type]["price"]
     new_document["cover_specs"] = stallion_in_db["cover_specs"][cover.cover_type]
 
     ## insert information left
@@ -278,20 +276,15 @@ async def edit_cover(
         updated_fields["arrival_date"] = utils.check_arrival_date(query.arrival_date)
 
     if query.new_subtotal is not None:
-        cover_payment_details = payments_utils.get_cover_payment_details(
-            query.new_subtotal,
-            payments_config["fees_coeff"],
-            payments_config["fees_offset"]
-        )
-
-        updated_fields.update(cover_payment_details.model_dump())
+        checkout = payments_utils.calculate_checkout(query.new_subtotal, payments_config["fees_coeff"])
+        updated_fields.update(checkout.model_dump())
 
     try:
         db.covers.update_one(
             {
                 "_id": cover_in_db["_id"]},
             {
-                "$set":updated_fields
+                "$set": updated_fields
             }
         )
     except PyMongoError as exc:
@@ -324,8 +317,8 @@ async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_
             {
                 "$project": {
                     "timestamps": 1,
-                    "subtotal_ht": 1,
-                    "fees_ht": 1,
+                    "subtotal": 1,
+                    "total": 1,
                     "_id": 1,
                     "stallion_name": 1,
                     "mare_name": 1,
@@ -341,8 +334,8 @@ async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_
                     "most_recent_timestamp": {
                         "$max": "$timestamps.timestamps_list.timestamp"
                     },
-                    "subtotal_ht": {"$first": "$subtotal_ht"},
-                    "fees_ht": {"$first": "$fees_ht"},
+                    "subtotal": {"$first": "$subtotal"},
+                    "total": {"$first": "$total"},
                     "stallion_name": {"$first": "$stallion_name"},
                     "mare_name": {"$first": "$mare_name"},
                     "status": {"$first": "$status"},
@@ -362,25 +355,12 @@ async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_
 
     cover_items = []
     for document in cursor:
-        if point_of_view == "seller":
-            price = payments_utils.calculate_income(
-                document["subtotal_ht"],
-                payments_config["TVA_cover_coeff_HT"]
-            )
-        else:
-            price = payments_utils.calculate_checkout(
-                document["subtotal_ht"],
-                document["fees_ht"],
-                payments_config["TVA_coeff_HT"],
-                payments_config["TVA_cover_coeff_HT"]
-            ).total
-
         cover_items.append({
             "id": str(document["_id"]),
             "stallion_name": document["stallion_name"],
             "mare_name": document["mare_name"],
             "status": document["status"],
-            "price": price
+            "price": document["subtotal"] if point_of_view == "seller" else document["total"]
         })
 
     return schemas.GetCoverGroupRM(items=cover_items)
@@ -403,20 +383,6 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), user_id 
     else:
         contact_phone_number = contact_in_db["phone_number"]
         contact_email = contact_in_db["email"]
-
-    # price
-    if pov == "seller":
-        price = payments_utils.calculate_income(
-            cover_in_db["subtotal_ht"],
-            payments_config["TVA_cover_coeff_HT"]
-        )
-    else:
-        price = payments_utils.calculate_checkout(
-            cover_in_db["subtotal_ht"],
-            cover_in_db["fees_ht"],
-            payments_config["TVA_coeff_HT"],
-            payments_config["TVA_cover_coeff_HT"]
-        ).total
 
     # timestamps
     timestamps_list = cover_in_db["timestamps"]["timestamps_list"]
@@ -454,8 +420,8 @@ async def get_cover_information(cover_in_db = Depends(get_cover_in_db), user_id 
         cover_specs=cover_in_db["cover_specs"],
         arrival_date=str(cover_in_db["arrival_date"].strftime("%d/%m/%Y")) if "arrival_date" in cover_in_db else "",
         status=cover_in_db["status"],
-        price=price,
-        base_price=cover_in_db["subtotal_ht"],
+        price=cover_in_db["subtotal"] if pov == "seller" else cover_in_db["total"],
+        base_price=cover_in_db["subtotal"],
         buyer_message=cover_in_db["message"],
         timestamps=timestamps_list,
         notes=cover_in_db["notes"][pov],

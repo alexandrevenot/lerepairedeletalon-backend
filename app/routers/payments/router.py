@@ -276,17 +276,7 @@ async def handle_stripe_accounts_webhook(request: Request, db = Depends(get_db))
 
 @router.get('/checkout-simulation', response_model=schemas.PriceWithFees)
 async def get_checkout_simulation(subtotal: int):
-    cover_payment_details = utils.get_cover_payment_details(
-        subtotal,
-        config['fees_coeff'],
-        config['fees_offset']
-    )
-    return utils.calculate_checkout(
-        cover_payment_details.subtotal_ht,
-        cover_payment_details.fees_ht,
-        config["TVA_coeff_HT"],
-        config["TVA_cover_coeff_HT"]
-    )
+    return utils.calculate_checkout(subtotal, config['fees_coeff'])
 
 @router.get('/get-checkout-session/{cover_id}', response_model=schemas.Checkout)
 async def get_checkout(
@@ -302,35 +292,23 @@ async def get_checkout(
         raise HTTPException(status_code=403, detail="only buyer can get checkout")
 
     if payment_part == "advance" and cover_in_db["status"] == "sellersigned":
-        advance_subtotal_ht = utils.calculate_advance(
-            cover_in_db["subtotal_ht"],
+        subtotal = utils.calculate_advance(
+            cover_in_db["subtotal"],
             cover_in_db["cover_specs"]["advance_percentage"]
         )
-        advance_fees_ht = utils.calculate_advance(
-            cover_in_db["fees_ht"],
+        fees = utils.calculate_advance(
+            cover_in_db["fees"],
             cover_in_db["cover_specs"]["advance_percentage"]
-        )
-        checkout = utils.calculate_checkout(
-            advance_subtotal_ht,
-            advance_fees_ht,
-            config["TVA_coeff_HT"],
-            config["TVA_cover_coeff_HT"]
         )
         product_name = f"Acompte pour la saillie de {cover_in_db['stallion_name']}"
     elif payment_part == "balance" and cover_in_db["status"] == "downpaid":
-        balance_subtotal_ht = utils.calculate_balance(
-            cover_in_db["subtotal_ht"],
+        subtotal = utils.calculate_balance(
+            cover_in_db["subtotal"],
             cover_in_db["cover_specs"]["advance_percentage"]
         )
-        balance_fees_ht = utils.calculate_balance(
-            cover_in_db["fees_ht"],
+        fees = utils.calculate_balance(
+            cover_in_db["fees"],
             cover_in_db["cover_specs"]["advance_percentage"]
-        )
-        checkout = utils.calculate_checkout(
-            balance_subtotal_ht,
-            balance_fees_ht,
-            config["TVA_coeff_HT"],
-            config["TVA_cover_coeff_HT"]
         )
         product_name = f"Solde pour la saillie de {cover_in_db['stallion_name']}"
     else:
@@ -365,22 +343,32 @@ async def get_checkout(
     # build new session if needed
     if session is None:
         seller_in_db = await get_user_from_object_id(cover_in_db["seller_id"], db, logger)
-        buyer_in_db = await get_user_from_object_id(cover_in_db["buyer_id"], db, logger)
 
         try:
             session = stripe.checkout.Session.create(
                 customer_email=current_user["email"],
-                line_items=[{
-                    "price_data": {
-                        "currency": "eur",
-                        "product_data": {"name": product_name},
-                        "unit_amount": utils.apply_discounts_on_total(checkout, buyer_in_db),
-                        "tax_behavior": "inclusive"
+                line_items=[
+                    {
+                        "price_data": {
+                            "currency": "eur",
+                            "product_data": {"name": product_name},
+                            "unit_amount": int(subtotal * 100),
+                            "tax_behavior": "inclusive"
+                        },
+                        "quantity": 1
                     },
-                    "quantity": 1
-                }],
+                    {
+                        "price_data": {
+                            "currency": "eur",
+                            "product_data": {"name": "Frais de service"},
+                            "unit_amount": int(fees * 100),
+                            "tax_behavior": "inclusive"
+                        },
+                        "quantity": 1
+                    }
+                ],
                 payment_intent_data={
-                    "application_fee_amount": utils.apply_discounts_on_fees(checkout, buyer_in_db, seller_in_db),
+                    "application_fee_amount": int(fees * 100),
                     "transfer_data": {"destination": seller_in_db["stripe_account"]["account"]["id"]}
                 },
                 payment_method_options={
@@ -507,6 +495,16 @@ async def handle_stripe_checkout_webhook(
                         session.abort_transaction()
                         logger.error("failed to write db: %s", traceback.format_exc())
                         raise HTTPException(status_code=500, detail='failed to write db') from exc
+
+            elif "harasdebellaly@gmail.com" in [seller_in_db["email"], buyer_in_db["email"]]:
+                message = "Fanny acheteuse ou vendeuse dans une saillie: "
+                message += f"il faudra lui rembourser les frais pour la saillie {cover_in_db['_id']}"
+                background_tasks.add_task(
+                    monitoring_tools.send_telegram_message,
+                    message,
+                    monitoring_config["telegram_api_key"],
+                    logger
+                )
 
             session.commit_transaction()
 

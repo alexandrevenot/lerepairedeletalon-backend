@@ -35,50 +35,30 @@ client = TestClient(server)
 
 class PaymentsTest(unittest.TestCase):
     def test(self):
-        subtotal_ht = 200
+        subtotal = 200
         fees_coeff = 0.5
-        fees_offset = 13
+        price_with_fees = payments_utils.calculate_checkout(subtotal, fees_coeff)
+        self.assertEqual(price_with_fees.total, 300)
+        self.assertEqual(price_with_fees.subtotal, 200)
+        self.assertEqual(price_with_fees.fees, 100)
 
-        cover_payment_details = payments_utils.get_cover_payment_details(subtotal_ht, fees_coeff, fees_offset)
-        self.assertEqual(cover_payment_details.fees_ht, 113)
-
-        tva_coeff = 0.2
-        tva_cover_coeff = 0.055
-        price_with_fees = payments_utils.calculate_checkout(subtotal_ht, cover_payment_details.fees_ht,  tva_coeff, tva_cover_coeff)
-        self.assertEqual(price_with_fees.total, 346.6)
-        self.assertEqual(price_with_fees.subtotal, 211)
-        self.assertEqual(price_with_fees.service_fees, 135.6)
-
-        price_with_fees = payments_utils.calculate_income(subtotal_ht, tva_cover_coeff)
-        self.assertEqual(price_with_fees, 211)
-
-        subtotal_ht = 13
-        fees_coeff = 0.06
-        fees_offset = 13
-        cover_payment_details = payments_utils.get_cover_payment_details(subtotal_ht, fees_coeff, fees_offset)
-        price_with_fees = payments_utils.calculate_checkout(subtotal_ht, cover_payment_details.fees_ht, tva_coeff, tva_cover_coeff)
-        self.assertEqual(price_with_fees.total, 30.25)
-        self.assertEqual(price_with_fees.service_fees, 16.54)
-
-        subtotal_ht = 200
         advance_percentage = 50
-        self.assertEqual(payments_utils.calculate_advance(subtotal_ht, advance_percentage), 100)
-        self.assertEqual(payments_utils.calculate_balance(subtotal_ht, advance_percentage), 100)
+        self.assertEqual(payments_utils.calculate_advance(subtotal, advance_percentage), 100)
+        self.assertEqual(payments_utils.calculate_balance(subtotal, advance_percentage), 100)
 
-        subtotal_ht = 117
+        subtotal = 117
         advance_percentage = 53
-        self.assertEqual(payments_utils.calculate_advance(subtotal_ht, advance_percentage) + payments_utils.calculate_balance(subtotal_ht, advance_percentage), subtotal_ht)
+        self.assertEqual(payments_utils.calculate_advance(subtotal, advance_percentage) + payments_utils.calculate_balance(subtotal, advance_percentage), subtotal)
 
         required_price = 117
         fees_coeff = 0.06
-        fees_offset = 13
-        corresponding_subtotal = payments_utils.calculate_corresponding_subtotal(required_price, fees_coeff, fees_offset, 0.2, 0.055)
-        self.assertTrue(corresponding_subtotal <= 90)
-        self.assertTrue(corresponding_subtotal >= 89)
+        corresponding_subtotal = payments_utils.calculate_corresponding_subtotal(required_price, fees_coeff)
+        self.assertTrue(corresponding_subtotal <= 111)
+        self.assertTrue(corresponding_subtotal >= 110)
 
         response = client.get('/payments/checkout-simulation?subtotal=117')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["total"], 134.66)
+        self.assertEqual(response.json()["total"], 126.36)
 
         # test stripe functions
         response = client.post('/auth/register', json={
