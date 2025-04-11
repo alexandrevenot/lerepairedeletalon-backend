@@ -162,7 +162,7 @@ async def create_and_send_contract(
     buyer_signer_dict["signature_request_delivery_methods"] = signature_request_delivery_methods
     buyer_signer_dict["signed_document_delivery_method"] = signed_document_delivery_method
     buyer_signer_dict["multi_factor_authentications"] = multi_factor_authentications
-    buyer_signer_dict["redirect_url"] = f"{frontend_url}/dashboard?coverId={str(cover_document['_id'])}"
+    buyer_signer_dict["redirect_url"] = f"{frontend_url}/dashboard?coverId={str(cover_document['_id'])}&pollCoverStatus=buyersigned"
     signers.append(buyer_signer_dict)
 
     seller_signer_dict = {}
@@ -175,7 +175,7 @@ async def create_and_send_contract(
     seller_signer_dict["signature_request_delivery_methods"] = signature_request_delivery_methods
     seller_signer_dict["signed_document_delivery_method"] = signed_document_delivery_method
     seller_signer_dict["multi_factor_authentications"] = multi_factor_authentications
-    seller_signer_dict["redirect_url"] = f"{frontend_url}/dashboard?coverId={str(cover_document['_id'])}"
+    seller_signer_dict["redirect_url"] = f"{frontend_url}/dashboard?coverId={str(cover_document['_id'])}&pollCoverStatus=sellersigned"
     signers.append(seller_signer_dict)
 
     placeholder_fields = []
