@@ -383,7 +383,7 @@ async def get_checkout(
                         "message": "Vous acceptez nos [Conditions Générales de Vente](https://www.lerepairedeletalon.com/cgv)."
                     }
                 },
-                return_url=f"{global_config['frontend_url']}/dashboard?coverId={str(cover_in_db['_id'])}"
+                return_url=f"{global_config['frontend_url']}/dashboard?coverId={str(cover_in_db['_id'])}&pollCoverStatus={'downpaid' if payment_part == 'advance' else 'fullypaid'}"
             )
         except (KeyError, stripe.error.StripeError) as exc:
             logger.error("failed to create checkout session: %s", traceback.format_exc())
