@@ -117,7 +117,7 @@ def send_notification_email(
         if new_status == "requested":
             message["Subject"] = 'Nouvelle demande de saillie'
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Nouvelle demande de saillie",
                 f"Nouvelle demande de saillie de {contact_firstname}",
                 "consulter votre tableau de bord",
@@ -126,7 +126,7 @@ def send_notification_email(
         elif new_status == "buyersigned":
             message["Subject"] = "Contrat signé par l'acheteur"
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Contrat signé par l'acheteur",
                 f"Contrat signé par {contact_firstname}",
                 "consulter votre tableau de bord",
@@ -135,7 +135,7 @@ def send_notification_email(
         elif new_status == "downpaid":
             message["Subject"] = "Acompte payé par l'acheteur"
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Acompte payé par l'acheteur",
                 f"Acompte payé par {contact_firstname}",
                 "consulter votre tableau de bord",
@@ -144,7 +144,7 @@ def send_notification_email(
         elif new_status == "fullypaid":
             message["Subject"] = "Solde payé par l'acheteur"
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Solde payé par l'acheteur",
                 f"Solde payé par {contact_firstname}",
                 "consulter votre tableau de bord",
@@ -154,7 +154,7 @@ def send_notification_email(
         if new_status == "denied":
             message["Subject"] = "Saillie refusée par le vendeur"
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Saillie refusée par le vendeur",
                 f"Saillie refusée par {contact_firstname}",
                 "consulter votre tableau de bord",
@@ -163,7 +163,7 @@ def send_notification_email(
         elif new_status == "approved":
             message["Subject"] = "Saillie acceptée par le vendeur"
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Saillie acceptée par le vendeur",
                 f"Saillie acceptée par {contact_firstname}",
                 "consulter votre tableau de bord",
@@ -172,7 +172,7 @@ def send_notification_email(
         elif new_status == "sellersigned":
             message["Subject"] = "Contrat signé par le vendeur"
             message.set_content(build_email_content(
-                f"{global_config['frontend_url']}/dashboard",
+                f"{global_config['frontend_url']}/tableau-de-bord",
                 "Contrat signé par le vendeur",
                 f"Contrat signé par {contact_firstname}",
                 "consulter votre tableau de bord",
