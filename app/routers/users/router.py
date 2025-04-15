@@ -147,7 +147,6 @@ async def put_legal_identity(query: schemas.PutLegalIdentityQuery, current_user 
 async def get_user_reviews(
     review_pov: str, # given or received
     cover_pov: str, # as buyer or as seller
-    _ = Depends(get_current_user),
     user_in_db = Depends(get_user_in_db),
     db = Depends(get_db)
 ):
@@ -327,7 +326,6 @@ async def post_user_review(
 async def get_user_score(
     cover_pov: str, # as buyer or as seller
     stallion_nsire: str = None,
-    _ = Depends(get_current_user),
     user_in_db = Depends(get_user_in_db)
 ):
     if cover_pov not in ["seller", "buyer"]:
