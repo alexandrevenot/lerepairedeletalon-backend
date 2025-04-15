@@ -6,7 +6,7 @@ import traceback
 from typing import Annotated
 from datetime import datetime
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, BackgroundTasks
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, BackgroundTasks, Header
 from pymongo.errors import PyMongoError
 
 import routers.stallions.utils as utils
@@ -184,23 +184,26 @@ async def get_available_stallion_production_breeds(db = Depends(get_db)):
     return schemas.AvailableStallionBreeds(breeds=sorted(list(set(itertools.chain(*[stallion["production_breeds"] for stallion in stallions])))))
 
 @router.get('/stallion/{stallion_id}', response_model=schemas.StallionProfileInformationForFavorite | schemas.StallionProfileInformation | schemas.StallionProfileInformationForEdition)
-async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), user_id = Depends(get_current_user_id)):
+async def get_stallion_profile(mode: str, stallion_in_db = Depends(get_stallion_in_db), authorization: Annotated[str | None, Header()] = None):
     if mode not in ['for_favorite', 'profile', 'for_edition']:
         raise HTTPException(status_code=422, detail="mode has to be either 'for_favorite', 'profile' or 'for_edition'")
 
     if mode == 'profile' and stallion_in_db["profile_status"] != "visible":
         raise HTTPException(status_code=403, detail="stallion profile information cant be fetched")
 
-    if mode == 'for_edition' and user_id != stallion_in_db["handler_id"]:
-        raise HTTPException(status_code=403, detail="only handler can get stallion information for edition")
+    if mode in ['for_favorite', 'for_edition']:
+        user_id = await get_current_user_id(authorization)
 
-    if mode == 'for_favorite':
-        return schemas.StallionProfileInformationForFavorite(
-            name=stallion_in_db["name"],
-            breed=stallion_in_db["breed"],
-            thumbnail_photo=stallion_in_db["thumbnail_photo"],
-            profile_status=stallion_in_db["profile_status"]
-        )
+        if mode == 'for_edition' and user_id != stallion_in_db["handler_id"]:
+            raise HTTPException(status_code=403, detail="only handler can get stallion information for edition")
+
+        if mode == 'for_favorite':
+            return schemas.StallionProfileInformationForFavorite(
+                name=stallion_in_db["name"],
+                breed=stallion_in_db["breed"],
+                thumbnail_photo=stallion_in_db["thumbnail_photo"],
+                profile_status=stallion_in_db["profile_status"]
+            )
 
     kwargs = {}
     fields = [
