@@ -13,8 +13,8 @@ find app_build/ -type d -name '__pycache__' -exec rm -r {} +
 mkdir app_build/logs/
 
 VERSION=$(cat VERSION | tr -d '\n')
-sudo docker build -t "api:${VERSION}" .
+sudo docker build -t "lrde-backend:${VERSION}" .
 
 rm -r app_build/
 
-sudo docker save -o "backend-${VERSION}.tar" "api:${VERSION}"
+sudo docker save -o "lrde-backend-${VERSION}.tar" "lrde-backend:${VERSION}"
