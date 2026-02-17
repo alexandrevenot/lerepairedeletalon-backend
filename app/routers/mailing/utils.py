@@ -94,11 +94,11 @@ def send_action_email(
             "Mettre à jour mon mot de passe"
         ), subtype='html')
 
-    with smtplib.SMTP(config['smtp_server_name'], config['smtp_server_port_out']) as server:
-        server.ehlo('lerepairedeletalon.com')
-        server.starttls()
-        server.login(config["service_email"], config["password"])
-        server.sendmail(config["declared_sender_email"], toaddrs, message.as_string())
+    # with smtplib.SMTP(config['smtp_server_name'], config['smtp_server_port_out']) as server:
+    #     server.ehlo('lerepairedeletalon.com')
+    #     server.starttls()
+    #     server.login(config["service_email"], config["password"])
+    #     server.sendmail(config["declared_sender_email"], toaddrs, message.as_string())
 
 def send_notification_email(
     send_to: str,
@@ -179,8 +179,8 @@ def send_notification_email(
                 "Consulter mon tableau de bord"
             ), subtype='html')
 
-    with smtplib.SMTP(config['smtp_server_name'], config['smtp_server_port_out']) as server:
-        server.ehlo('lerepairedeletalon.com')
-        server.starttls()
-        server.login(config["service_email"], config["password"])
-        server.sendmail(config["declared_sender_email"], toaddrs, message.as_string())
+    # with smtplib.SMTP(config['smtp_server_name'], config['smtp_server_port_out']) as server:
+    #     server.ehlo('lerepairedeletalon.com')
+    #     server.starttls()
+    #     server.login(config["service_email"], config["password"])
+    #     server.sendmail(config["declared_sender_email"], toaddrs, message.as_string())

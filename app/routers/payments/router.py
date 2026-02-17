@@ -380,7 +380,7 @@ async def get_checkout(
                 ui_mode="embedded",
                 custom_text={
                     "submit": {
-                        "message": "Vous acceptez nos [Conditions Générales de Vente](https://www.lerepairedeletalon.com/conditions-generales-de-vente)."
+                        "message": "Vous acceptez nos [Conditions Générales de Vente](https://lerepairedeletalon.alexandrevenot.ovh/conditions-generales-de-vente)."
                     }
                 },
                 return_url=f"{global_config['frontend_url']}/tableau-de-bord?coverId={str(cover_in_db['_id'])}&pollCoverStatus={'downpaid' if payment_part == 'advance' else 'fullypaid'}"
