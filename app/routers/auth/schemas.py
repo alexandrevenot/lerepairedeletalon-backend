@@ -1,7 +1,7 @@
 import re
 
 from fastapi import HTTPException
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator
 
 EMAIL_PATTERN = r'^[\w\.-]+@[\w\.-]+\.\w+$'
 PHONE_NUMBER_PATTERN = r'^\d{10}$'

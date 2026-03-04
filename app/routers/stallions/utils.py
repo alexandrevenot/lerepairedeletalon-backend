@@ -5,7 +5,7 @@ import yaml
 from dateutil.relativedelta import relativedelta
 from PIL import Image
 
-import routers.payments.utils as payments_utils
+from ..payments import utils as payments_utils
 
 payments_config = payments_utils.load_config()
 

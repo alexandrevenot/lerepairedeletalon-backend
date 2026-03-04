@@ -7,15 +7,15 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pymongo.errors import PyMongoError
 
-import routers.covers.utils as utils
-import routers.covers.schemas as schemas
-import routers.payments.utils as payments_utils
-import routers.contracts.utils as contracts_utils
-import routers.stallions.utils as stallions_utils
-import routers.users.utils as users_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..payments import utils as payments_utils
+from ..contracts import utils as contracts_utils
+from ..stallions import utils as stallions_utils
+from ..users import utils as users_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
+from ...dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
 
 # configs
 global_config = utils.load_global_config()

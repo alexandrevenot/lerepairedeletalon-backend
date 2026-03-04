@@ -2,7 +2,7 @@ import yaml
 
 import stripe
 
-import routers.payments.schemas as schemas
+from . import schemas
 
 def load_config() -> dict:
     with open('etc/payments/config.yaml', 'r', encoding="utf-8") as f:

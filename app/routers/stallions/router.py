@@ -9,13 +9,13 @@ from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, BackgroundTasks, Header
 from pymongo.errors import PyMongoError
 
-import routers.stallions.utils as utils
-import routers.stallions.schemas as schemas
-import routers.geoloc.utils as geoloc_utils
-import routers.payments.utils as payments_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..geoloc import utils as geoloc_utils
+from ..payments import utils as payments_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
+from ...dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
     get_db_client, BucketGetter, get_current_user_id, get_stallion_owner_in_db
 
 # configs

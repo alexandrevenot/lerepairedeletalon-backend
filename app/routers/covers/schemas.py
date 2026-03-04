@@ -3,9 +3,9 @@ from typing import Any, Annotated
 from pydantic import BaseModel, field_validator, Field
 from fastapi import HTTPException
 
-import routers.stallions.utils as stallions_utils
-import routers.stallions.schemas as stallions_schemas
-import routers.covers.utils as utils
+from . import utils
+from ..stallions import utils as stallions_utils
+from ..stallions import schemas as stallions_schemas
 
 config = utils.load_config()
 stallions_config = stallions_utils.load_config()

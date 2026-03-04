@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import SecretStr
 from pymongo.errors import PyMongoError
 
-import routers.admin.utils as utils
-import routers.admin.schemas as schemas
-import routers.stallions.utils as stallions_utils
+from . import utils
+from . import schemas
+from ..stallions import utils as stallions_utils
 
-from dependencies import get_db, StallionInDBGetter, UserInDBGetter, StallionOwnerInDBGetter
-from routers.auth.utils import verify_password
+from ...dependencies import get_db, StallionInDBGetter, UserInDBGetter, StallionOwnerInDBGetter
+from ..auth.utils import verify_password
 
 # configs
 config = utils.load_config()

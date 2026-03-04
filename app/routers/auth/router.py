@@ -7,12 +7,12 @@ import smtplib
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pymongo.errors import PyMongoError
 
-import routers.auth.utils as utils
-import routers.auth.schemas as schemas
-import routers.mailing.utils as mailing_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..mailing import utils as mailing_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import get_db, get_db_client
+from ...dependencies import get_db, get_db_client
 
 # configs
 global_config = utils.load_global_config()

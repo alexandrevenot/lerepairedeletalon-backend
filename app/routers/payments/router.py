@@ -6,13 +6,13 @@ import stripe
 from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from pymongo.errors import PyMongoError
 
-import routers.payments.schemas as schemas
-import routers.payments.utils as utils
-import routers.covers.utils as covers_utils
-import routers.users.utils as users_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..covers import utils as covers_utils
+from ..users import utils as users_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
+from ...dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
     get_user_from_object_id, get_db_client
 
 # configs

@@ -2,8 +2,8 @@ import yaml
 import aiohttp
 from datetime import timedelta
 
-import routers.payments.utils as payments_utils
-import routers.stallions.utils as stallions_utils
+from ..payments import utils as payments_utils
+from ..stallions import utils as stallions_utils
 
 payments_config = payments_utils.load_config()
 stallions_config = stallions_utils.load_config()

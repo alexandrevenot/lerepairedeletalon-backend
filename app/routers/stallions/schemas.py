@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-import routers.stallions.utils as utils
+from . import utils
 
 config = utils.load_config()
 

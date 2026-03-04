@@ -4,10 +4,10 @@ import yaml
 from bson.objectid import ObjectId
 from pymongo.errors import PyMongoError
 
-import routers.covers.utils as cover_utils
-import routers.mailing.utils as mailing_utils
+from ..covers import utils as covers_utils
+from ..mailing import utils as mailing_utils
 
-covers_config = cover_utils.load_config()
+covers_config = covers_utils.load_config()
 
 def load_global_config() -> dict:
     with open('etc/config.yaml', 'r', encoding="utf-8") as f:

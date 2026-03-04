@@ -9,11 +9,11 @@ from bson.objectid import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.errors import PyMongoError
 
-import routers.users.utils as utils
-import routers.users.schemas as schemas
-import routers.payments.utils as payments_utils
+from . import utils
+from . import schemas
+from ..payments import utils as payments_utils
 
-from dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
+from ...dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
 
 # configs
 global_config = utils.load_global_config()
