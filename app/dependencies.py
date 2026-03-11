@@ -9,7 +9,7 @@ from pymongo.database import Database
 from pymongo.errors import PyMongoError
 from google.cloud import storage
 
-import routers.auth.utils as auth_utils
+from .routers.auth.utils import verify_token
 
 with open('etc/config.yaml', 'r', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
@@ -57,7 +57,7 @@ class CurrentUserGetter:
         except (IndexError, AttributeError) as exc:
             raise HTTPException(status_code=401, detail='token not found in the request') from exc
 
-        _id = auth_utils.verify_token(token, 'access')
+        _id = verify_token(token, 'access')
 
         try:
             user_in_db = db.users.find_one({'_id': _id})
@@ -77,7 +77,7 @@ async def get_current_user_id(authorization: Annotated[str | None, Header()] = N
     except (IndexError, AttributeError) as exc:
         raise HTTPException(status_code=401, detail='token not found in the request') from exc
 
-    return auth_utils.verify_token(token, 'access')
+    return verify_token(token, 'access')
 
 class CoverInDBGetter:
     def __init__(self, logger):

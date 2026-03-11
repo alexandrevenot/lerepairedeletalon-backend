@@ -1,4 +1,0 @@
-mongomock
-httpx
-aioresponses
-freezegun

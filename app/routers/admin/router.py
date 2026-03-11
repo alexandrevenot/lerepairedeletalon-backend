@@ -40,7 +40,7 @@ get_stallion_owner_in_db = StallionOwnerInDBGetter(logger)
 router = APIRouter(prefix='/admin')
 
 async def verify_admin_password(password: SecretStr = Query(...)):
-    if not verify_password(password.get_secret_value(), config['hashed_password']):
+    if not verify_password(password.get_secret_value(), config['admin_hashed_password']):
         raise HTTPException(status_code=401, detail='invalid password')
 
 @router.get('/stallions-to-be-validated', response_model=schemas.IdList)

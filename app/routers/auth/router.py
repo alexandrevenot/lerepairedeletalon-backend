@@ -13,12 +13,7 @@ from ..mailing import utils as mailing_utils
 from ...monitoring import tools as monitoring_tools
 
 from ...dependencies import get_db, get_db_client
-
-# configs
-global_config = utils.load_global_config()
-config = utils.load_config()
-mailing_config = mailing_utils.load_config()
-monitoring_config = monitoring_tools.load_config()
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -87,7 +82,7 @@ async def register(
             background_tasks.add_task(
                 monitoring_tools.send_telegram_message,
                 f"Un compte vient d'être créé\n*Prénom*: {user.firstname}\n*Nom*: {user.lastname}",
-                monitoring_config["telegram_api_key"],
+                settings.telegram_api_key,
                 logger
             )
 
@@ -118,8 +113,8 @@ async def login(user: schemas.LoginQuery, db = Depends(get_db)):
         raise HTTPException(status_code=401, detail='invalid credentials')
 
     return {
-        'accessToken': utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
-        'refreshToken': utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
+        'accessToken': utils.create_access_token(user_in_db, settings.access_token_expire_minutes),
+        'refreshToken': utils.create_refresh_token(user_in_db, settings.refresh_token_expire_days)
     }
 
 @router.post('/refresh-token')
@@ -136,6 +131,6 @@ async def refresh_token(query: schemas.RefreshTokenQuery, db = Depends(get_db)):
         raise HTTPException(status_code=404, detail='user not found')
 
     return {
-        'accessToken': utils.create_access_token(user_in_db, config['access_token_expire_minutes']),
-        'refreshToken': utils.create_refresh_token(user_in_db, config['refresh_token_expire_days'])
+        'accessToken': utils.create_access_token(user_in_db, settings.access_token_expire_minutes),
+        'refreshToken': utils.create_refresh_token(user_in_db, settings.refresh_token_expire_days)
     }
