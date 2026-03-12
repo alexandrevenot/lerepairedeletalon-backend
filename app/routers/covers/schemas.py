@@ -3,12 +3,9 @@ from typing import Any, Annotated
 from pydantic import BaseModel, field_validator, Field
 from fastapi import HTTPException
 
-from . import utils
-from ..stallions import utils as stallions_utils
 from ..stallions import schemas as stallions_schemas
 
-config = utils.load_config()
-stallions_config = stallions_utils.load_config()
+from app.config import settings
 
 class CoverQuery(BaseModel):
     seller_id: str
@@ -23,7 +20,7 @@ class CoverQuery(BaseModel):
     @field_validator('cover_type')
     @classmethod
     def cover_type_validator(cls, v):
-        if v not in stallions_config["cover_types"]:
+        if v not in settings.cover_types:
             raise HTTPException(status_code=422, detail="cover type not allowed")
         return v
 
@@ -33,7 +30,7 @@ class ManuallyStepForwardCoverQuery(BaseModel):
     @field_validator('next_status')
     @classmethod
     def next_status_validator(cls, v):
-        if v not in config["status"]:
+        if v not in settings.cover_status:
             raise HTTPException(status_code=422, detail="status not allowed")
         return v
 
@@ -98,6 +95,6 @@ class EditCoverQuery(BaseModel):
     arrival_date: str = ""
     new_subtotal: Annotated[int, Field(
         strict=True,
-        ge=stallions_config["cover_minimum_price"],
+        ge=settings.cover_minimum_price,
         default=None
     )]

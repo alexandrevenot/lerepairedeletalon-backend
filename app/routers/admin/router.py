@@ -6,16 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import SecretStr
 from pymongo.errors import PyMongoError
 
-from . import utils
 from . import schemas
-from ..stallions import utils as stallions_utils
 
 from ...dependencies import get_db, StallionInDBGetter, UserInDBGetter, StallionOwnerInDBGetter
 from ..auth.utils import verify_password
-
-# configs
-config = utils.load_config()
-stallions_config = stallions_utils.load_config()
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -40,7 +35,7 @@ get_stallion_owner_in_db = StallionOwnerInDBGetter(logger)
 router = APIRouter(prefix='/admin')
 
 async def verify_admin_password(password: SecretStr = Query(...)):
-    if not verify_password(password.get_secret_value(), config['admin_hashed_password']):
+    if not verify_password(password.get_secret_value(), settings.admin_hashed_password):
         raise HTTPException(status_code=401, detail='invalid password')
 
 @router.get('/stallions-to-be-validated', response_model=schemas.IdList)
@@ -139,7 +134,7 @@ async def update_stallion_profile_status(
     _ = Depends(verify_admin_password),
     db = Depends(get_db)
     ):
-    if new_status not in stallions_config['profile_statuses']:
+    if new_status not in settings.profile_statuses:
         raise HTTPException(status_code=403, detail="status does not exist")
 
     if new_status == stallion_in_db["profile_status"]:

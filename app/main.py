@@ -1,4 +1,3 @@
-import yaml
 from pymongo import MongoClient
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,15 +16,14 @@ import routers.mailing.router as mailing_router
 import routers.admin.router as admin_router
 import routers.stallion_owners.router as stallion_owners_router
 
-with open('etc/config.yaml', 'r', encoding='utf-8') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
+from  app.config import settings
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 @app.on_event("startup")
 async def start():
     dependencies.mongodb_client_instance = MongoClient(
-        f"mongodb+srv://{config['db_username']}:{config['db_password']}@{config['mongo_url']}",
+        f"mongodb+srv://{settings.db_username}:{settings.db_password}@{settings.mongo_url}",
         tls=True
     )
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 _APP_DIR = Path(__file__).parent
 
@@ -25,12 +25,19 @@ class Settings(BaseSettings):
     # database
     db_to_use: str = "test"
     mongo_url: str = "mongodb-25a50afa-of01ab2eb.database.cloud.ovh.net"
+    db_username: Optional[str] = None
+    db_password: Optional[str] = None
 
     # obj storage
     stallion_photos_bucket_name: str = "lerepairedeletalon-public"
 
+    # admin
+    admin_hashed_password: Optional[str] = None
+
     # auth
     algorithm: str = "HS256"
+    access_secret_key: Optional[str] = None
+    refresh_secret_key: Optional[str] = None
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 180
 
@@ -49,6 +56,7 @@ class Settings(BaseSettings):
         "lib": "Monte en liberté",
         "hand": "Monte en main"
     }
+    contracts_secret_token: Optional[str] = None
 
     # covers
     buyer_status_graph: Dict[str, List[str]] = {
@@ -71,7 +79,7 @@ class Settings(BaseSettings):
         "fullypaid": [],
         "denied": ["requested"]
     }
-    status: List[str] = [
+    cover_status: List[str] = [
         "requested",
         "approved",
         "signingstarted",
@@ -81,7 +89,7 @@ class Settings(BaseSettings):
         "fullypaid",
         "denied"
     ]
-    groups: Dict[str, List[str]] = {
+    cover_groups: Dict[str, List[str]] = {
         "denied": ["denied"],
         "pendingApproval": ["requested", "approved"],
         "pendingSignature": ["signingstarted", "buyersigned", "sellersigned"],
@@ -110,9 +118,16 @@ class Settings(BaseSettings):
     password_update_page: str = "/password-update"
     smtp_server_name: str = "ssl0.ovh.net"
     smtp_server_port_out: int = 587
+    mailing_service_email: Optional[str] = None
+    mailing_password: Optional[str] = None
+
+    telegram_api_key: Optional[str] = None
 
     # payments
     fees_coeff: float = 0.08
+    stripe_api_key: Optional[str] = None
+    stripe_accounts_endpoint_secret: Optional[str] = None
+    stripe_checkout_endpoint_secret: Optional[str] = None
 
     # stallions
     photo_max_size: int = 4194304 # 4Mo

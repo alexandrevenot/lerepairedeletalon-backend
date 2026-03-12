@@ -5,7 +5,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 _fake_client = mongomock.MongoClient()
-fake_database = _fake_client.main
+
+def _get_db():
+    return _fake_client.main
+
+@pytest.fixture(autouse=True)
+def reset_db():
+    db = _fake_client.main
+    for collection_name in db.list_collection_names():
+        db[collection_name].drop()
+    yield
 
 class DummySession:
     def __bool__(self): return False
@@ -34,13 +43,13 @@ def _make_bucket_mock():
 
 @pytest.fixture
 def fake_db():
-    return fake_database
+    return _get_db()
 
 @pytest.fixture
 def auth_client():
     from app.routers.auth import router as auth_router
     app = FastAPI()
-    app.dependency_overrides[auth_router.get_db] = lambda: fake_database
+    app.dependency_overrides[auth_router.get_db] = _get_db
     app.dependency_overrides[auth_router.get_db_client] = lambda: DummyClient()
     auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
     auth_router.monitoring_tools.send_telegram_message = unittest.mock.Mock()
@@ -51,10 +60,10 @@ def auth_client():
 def stallions_client():
     from app.routers.stallions import router as stallions_router
     app = FastAPI()
-    app.dependency_overrides[stallions_router.get_db] = lambda: fake_database
+    app.dependency_overrides[stallions_router.get_db] = _get_db
     app.dependency_overrides[stallions_router.get_db_client] = lambda: DummyClient()
     app.dependency_overrides[stallions_router.get_stalllion_photos_bucket] = lambda: _make_bucket_mock()
-    stallions_router.monitoring_tools.send_telegram_message = unittest.mock.Mock()
+    stallions_router.monitoring_tools.send_telegram_message = unittest.mock.AsyncMock()
     app.include_router(stallions_router.router)
     return TestClient(app)
 
@@ -62,7 +71,7 @@ def stallions_client():
 def covers_client():
     from app.routers.covers import router as covers_router
     app = FastAPI()
-    app.dependency_overrides[covers_router.get_db] = lambda: fake_database
+    app.dependency_overrides[covers_router.get_db] = _get_db
     app.include_router(covers_router.router)
     return TestClient(app)
 
@@ -70,7 +79,7 @@ def covers_client():
 def payments_client():
     from app.routers.payments import router as payments_router
     app = FastAPI()
-    app.dependency_overrides[payments_router.get_db] = lambda: fake_database
+    app.dependency_overrides[payments_router.get_db] = _get_db
     app.dependency_overrides[payments_router.get_db_client] = lambda: DummyClient()
     app.include_router(payments_router.router)
     return TestClient(app)
@@ -79,8 +88,9 @@ def payments_client():
 def contracts_client():
     from app.routers.contracts import router as contracts_router
     app = FastAPI()
-    app.dependency_overrides[contracts_router.get_db] = lambda: fake_database
+    app.dependency_overrides[contracts_router.get_db] = _get_db
     app.dependency_overrides[contracts_router.get_db_client] = lambda: DummyClient()
+    contracts_router.monitoring_tools.send_telegram_message = unittest.mock.AsyncMock()
     app.include_router(contracts_router.router)
     return TestClient(app)
 
@@ -88,7 +98,7 @@ def contracts_client():
 def users_client():
     from app.routers.users import router as users_router
     app = FastAPI()
-    app.dependency_overrides[users_router.get_db] = lambda: fake_database
+    app.dependency_overrides[users_router.get_db] = _get_db
     app.dependency_overrides[users_router.get_db_client] = lambda: DummyClient()
     app.include_router(users_router.router)
     return TestClient(app)
@@ -97,7 +107,7 @@ def users_client():
 def mailing_client():
     from app.routers.mailing import router as mailing_router
     app = FastAPI()
-    app.dependency_overrides[mailing_router.get_db] = lambda: fake_database
+    app.dependency_overrides[mailing_router.get_db] = _get_db
     app.dependency_overrides[mailing_router.get_db_client] = lambda: DummyClient()
     app.include_router(mailing_router.router)
     return TestClient(app)
@@ -106,7 +116,7 @@ def mailing_client():
 def admin_client():
     from app.routers.admin import router as admin_router
     app = FastAPI()
-    app.dependency_overrides[admin_router.get_db] = lambda: fake_database
+    app.dependency_overrides[admin_router.get_db] = _get_db
     app.include_router(admin_router.router)
     return TestClient(app)
 
@@ -114,7 +124,7 @@ def admin_client():
 def stallion_owners_client():
     from app.routers.stallion_owners import router as stallion_owners_router
     app = FastAPI()
-    app.dependency_overrides[stallion_owners_router.get_db] = lambda: fake_database
+    app.dependency_overrides[stallion_owners_router.get_db] = _get_db
     app.include_router(stallion_owners_router.router)
     return TestClient(app)
 

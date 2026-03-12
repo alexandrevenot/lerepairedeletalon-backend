@@ -1,22 +1,9 @@
-import yaml
 import aiohttp
 from datetime import timedelta
 
 from ..payments import utils as payments_utils
-from ..stallions import utils as stallions_utils
 
-payments_config = payments_utils.load_config()
-stallions_config = stallions_utils.load_config()
-
-def load_global_config() -> dict:
-    with open('etc/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-def load_config() -> dict:
-    with open('etc/contracts/config.yaml', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-config = load_config()
+from app.config import settings
 
 def build_identification_field(stallion_owner_in_db: None | dict, user_in_db: dict):
     if stallion_owner_in_db is None:
@@ -224,7 +211,7 @@ async def create_and_send_contract(
 
     placeholder_fields.append({
         "api_key": "cover_type",
-        "value": config["cover_technique_names"][cover_document["cover_type"]]
+        "value": settings.cover_technique_names[cover_document["cover_type"]]
     })
 
     placeholder_fields.append({
@@ -350,7 +337,7 @@ async def create_and_send_contract(
         "signers": signers,
         "placeholder_fields": placeholder_fields,
         "emails": {
-            "cc_email_addresses": config['cc_email_addresses'],
+            "cc_email_addresses": settings.cc_email_addresses,
             "signature_request_subject": "Votre contrat de saillie est prêt pour signature",
             "signature_request_text": "Bonjour __FULL_NAME__,\n\nPour vérifier et signer votre contrat de saillie, cliquez sur le bouton ci-dessous.",
             "final_contract_subject": "La signature de votre document est terminée",

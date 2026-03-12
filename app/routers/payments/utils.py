@@ -1,20 +1,9 @@
-import yaml
-
 import stripe
 
 from . import schemas
+from app.config import settings
 
-def load_config() -> dict:
-    with open('etc/payments/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-def load_global_config() -> dict:
-    with open('etc/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-config = load_config()
-
-stripe.api_key = config["api_key"]
+stripe.api_key = settings.stripe_api_key
 
 def delete_stripe_account(account_id):
     stripe.Account.delete(account_id)

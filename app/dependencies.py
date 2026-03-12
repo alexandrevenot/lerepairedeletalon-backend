@@ -2,7 +2,6 @@ import traceback
 from bson.objectid import ObjectId
 from typing import Annotated
 
-import yaml
 from fastapi import HTTPException, Depends, Path, Header
 from pymongo import MongoClient
 from pymongo.database import Database
@@ -10,14 +9,12 @@ from pymongo.errors import PyMongoError
 from google.cloud import storage
 
 from .routers.auth.utils import verify_token
-
-with open('etc/config.yaml', 'r', encoding='utf-8') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
+from app.config import settings
 
 mongodb_client_instance: MongoClient = None
 
 def get_db() -> Database:
-    return getattr(mongodb_client_instance, config['db_to_use'])
+    return getattr(mongodb_client_instance, settings.db_to_use)
 
 def get_db_client() -> MongoClient:
     return mongodb_client_instance

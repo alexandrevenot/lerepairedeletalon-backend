@@ -14,10 +14,7 @@ from . import schemas
 from ..payments import utils as payments_utils
 
 from ...dependencies import get_db, UserInDBGetter, CurrentUserGetter, CoverInDBGetter, get_db_client, BucketGetter
-
-# configs
-global_config = utils.load_global_config()
-config = utils.load_config()
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -37,7 +34,7 @@ logger.info('Logger initialized')
 get_user_in_db = UserInDBGetter(logger)
 get_current_user = CurrentUserGetter(logger)
 get_cover_in_db = CoverInDBGetter(logger)
-get_stalllion_photos_bucket = BucketGetter(global_config['stallion_photos_bucket_name'])
+get_stalllion_photos_bucket = BucketGetter(settings.stallion_photos_bucket_name)
 
 # routes
 router = APIRouter(prefix='/users')

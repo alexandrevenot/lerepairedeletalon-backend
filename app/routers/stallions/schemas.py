@@ -4,9 +4,7 @@ from typing import Annotated
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from . import utils
-
-config = utils.load_config()
+from app.config import settings
 
 class MosaicProfileInfo(BaseModel):
     id: str
@@ -24,7 +22,7 @@ class MosaicProfileInfo(BaseModel):
     @classmethod
     def cover_types_validator(cls, value):
         for cover_type in value:
-            if cover_type not in config["cover_types"]:
+            if cover_type not in settings.cover_types:
                 raise HTTPException(status_code=500, detail="failed to search stallions")
         return value
 
@@ -42,7 +40,7 @@ class DashboardStallionBox(BaseModel):
     @field_validator('profile_status')
     @classmethod
     def profile_status_validator(cls, value):
-        if value not in config["profile_statuses"]:
+        if value not in settings.profile_statuses:
             raise HTTPException(status_code=500, detail="failed to get stallion boxes")
         return value
 
@@ -56,13 +54,13 @@ class FinalStallionFields(BaseModel):
     birthdate: str
 
 def check_balance_payment_condition(value):
-    if value not in config["balance_payment_conditions"]:
+    if value not in settings.balance_payment_conditions:
         raise HTTPException(status_code=422, detail="unallowed balance payment condition")
     return value
 
 def check_vaccines(value):
     for vaccine in value:
-        if vaccine not in config["available_vaccines"]:
+        if vaccine not in settings.available_vaccines:
             raise HTTPException(status_code=422, detail="unallowed vaccines")
     return value
 
@@ -84,7 +82,7 @@ class StallionSTDSpecs(BaseModel):
     anemie: SingularStallionSTDSpecs = None
 
 class SingularMareSTDSpecs(BaseModel):
-    test_oldness: Annotated[int, Field(strict=True, ge=config["minimum_std_test_oldness"], le=config["maximum_std_test_oldness"])]
+    test_oldness: Annotated[int, Field(strict=True, ge=settings.minimum_std_test_oldness, le=settings.maximum_std_test_oldness)]
 
 class MareSTDSpecs(BaseModel):
     metrite: SingularMareSTDSpecs = None
@@ -92,9 +90,9 @@ class MareSTDSpecs(BaseModel):
     anemie: SingularMareSTDSpecs = None
 
 class LIBandHANDSpecs(BaseModel):
-    price: Annotated[int, Field(strict=True, ge=config["cover_minimum_price"])]
+    price: Annotated[int, Field(strict=True, ge=settings.cover_minimum_price)]
     balance_payment_condition: str
-    advance_percentage: Annotated[int, Field(strict=True, ge=config["advance_min_percentage_value"], le=config["advance_max_percentage_value"])]
+    advance_percentage: Annotated[int, Field(strict=True, ge=settings.advance_min_percentage_value, le=settings.advance_max_percentage_value)]
     cover_place: str
     maximum_nb_of_attempts: Annotated[int, Field(strict=True, ge=1)]
     demanded_std_negative_tests: MareSTDSpecs
