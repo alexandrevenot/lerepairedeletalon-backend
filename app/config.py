@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # obj storage
     stallion_photos_bucket_name: str = "lerepairedeletalon-public"
+    gcp_credentials_json: Optional[str] = None
 
     # admin
     admin_hashed_password: Optional[str] = None

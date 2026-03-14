@@ -1,3 +1,4 @@
+import json
 import traceback
 from bson.objectid import ObjectId
 from typing import Annotated
@@ -7,6 +8,7 @@ from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
 from google.cloud import storage
+from google.oauth2 import service_account
 
 from .routers.auth.utils import verify_token
 from app.config import settings
@@ -124,7 +126,9 @@ class ObjectStorageManager:
     def __new__(cls, bucket_name: str):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.client = storage.Client()
+            credentials_info = json.loads(settings.gcp_credentials_json)
+            credentials = service_account.Credentials.from_service_account_info(credentials_info)
+            cls._instance.client = storage.Client(credentials=credentials)
             cls._instance.buckets = {}
 
         if bucket_name not in cls._instance.buckets.keys():
