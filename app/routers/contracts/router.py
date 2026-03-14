@@ -6,19 +6,15 @@ import traceback
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pymongo.errors import PyMongoError
 
-import routers.contracts.utils as utils
-import routers.contracts.schemas as schemas
-import routers.covers.utils as covers_utils
-import routers.users.utils as users_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..covers import utils as covers_utils
+from ..users import utils as users_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import get_db, get_user_from_object_id, CurrentUserGetter, \
+from ...dependencies import get_db, get_user_from_object_id, CurrentUserGetter, \
     get_db_client, get_current_user_id, CoverInDBGetter, get_stallion_owner_from_object_id
-
-# configs
-global_config = utils.load_global_config()
-config = utils.load_config()
-monitoring_config = monitoring_tools.load_config()
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -70,19 +66,19 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
 
     try:
         returned_json, _ = await utils.create_and_send_contract(
-            config["contracts_templates_ids"][cover_in_db["cover_type"]],
+            settings.contracts_templates_ids[cover_in_db["cover_type"]],
             cover_in_db,
             buyer_in_db,
             seller_in_db,
             stallion_owner_in_db,
-            global_config["send_demo_contracts"],
-            config['signature_request_links_expiration_delay_hours'],
-            config['signature_request_delivery_methods'],
-            config['signed_document_delivery_method'],
-            config['multi_factor_authentications'],
-            global_config["frontend_url"],
-            config['esignatures_contracts_api_url'],
-            config['secret_token']
+            settings.send_demo_contracts,
+            settings.signature_request_links_expiration_delay_hours,
+            settings.signature_request_delivery_methods,
+            settings.signed_document_delivery_method,
+            settings.multi_factor_authentications,
+            settings.frontend_url,
+            settings.esignatures_contracts_api_url,
+            settings.contracts_secret_token
         )
         assert returned_json is not None
     except KeyError as exc:
@@ -117,7 +113,7 @@ async def engage_signature_process(cover_in_db: dict, db = Depends(get_db), db_c
             message = f"Une saillie vient de changer de statut\n*ID*: {cover_in_db['_id']}"
             message += "\n*Nouveau statut*: signingstarted"
             message += f"\n*Utilisateur source*: {buyer_in_db['firstname']} {buyer_in_db['lastname']}"
-            await monitoring_tools.send_telegram_message(message, monitoring_config["telegram_api_key"], logger)
+            await monitoring_tools.send_telegram_message(message, settings.telegram_api_key, logger)
             session.commit_transaction()
         except AssertionError as exc:
             session.abort_transaction()
@@ -161,7 +157,7 @@ async def manage_esignatures_wehbooks(
     background_tasks: BackgroundTasks,
     db = Depends(get_db)
 ):
-    if query.secret_token != config["secret_token"]:
+    if query.secret_token != settings.contracts_secret_token:
         raise HTTPException(status_code=401)
 
     if query.status != "signer-signed":
@@ -196,7 +192,7 @@ async def manage_esignatures_wehbooks(
         background_tasks.add_task(
             monitoring_tools.send_telegram_message,
             message,
-            monitoring_config["telegram_api_key"],
+            settings.telegram_api_key,
             logger
         )
     elif cover_in_db["status"] == "buyersigned" and signing_order == "2":
@@ -211,7 +207,7 @@ async def manage_esignatures_wehbooks(
         background_tasks.add_task(
             monitoring_tools.send_telegram_message,
             message,
-            monitoring_config["telegram_api_key"],
+            settings.telegram_api_key,
             logger
         )
     return {"message": "successfully received webhook"}

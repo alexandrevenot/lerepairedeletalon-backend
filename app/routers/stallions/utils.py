@@ -1,23 +1,11 @@
 from datetime import datetime, date
 from io import BytesIO
 
-import yaml
 from dateutil.relativedelta import relativedelta
 from PIL import Image
 
-import routers.payments.utils as payments_utils
-
-payments_config = payments_utils.load_config()
-
-def load_global_config() -> dict:
-    with open('etc/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-def load_config() -> dict:
-    with open('etc/stallions/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-config = load_config()
+from ..payments import utils as payments_utils
+from app.config import settings
 
 def get_displayed_price(document: dict, min_price: float, max_price: float, cover_types: list[str]) -> float:
     count = 0
@@ -36,7 +24,7 @@ def get_displayed_price(document: dict, min_price: float, max_price: float, cove
     else:
         value = min(value["price"] for key, value in document["cover_specs"].items() if value["price"] >= min_price and value["price"] <= max_price and key in cover_types)
 
-    return payments_utils.calculate_checkout(value, payments_config['fees_coeff']).total
+    return payments_utils.calculate_checkout(value, settings.fees_coeff).total
 
 def calculate_age(birthdate: datetime) -> int:
     today = date.today()

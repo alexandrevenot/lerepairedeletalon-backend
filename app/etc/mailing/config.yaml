@@ -1,8 +1,0 @@
-logo_filename: logo-black.png
-declared_sender_email: noreply@lerepairedeletalon.com
-service_email: postmaster@lerepairedeletalon.com
-password: "not_the_password"
-email_verification_route: /email-verification
-password_update_page: /password-update
-smtp_server_name: ssl0.ovh.net
-smtp_server_port_out: 587

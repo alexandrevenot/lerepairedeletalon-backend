@@ -1,14 +1,17 @@
 import pandas as pd
 import bisect
 import unicodedata
+from pathlib import Path
+
+_APP_DIR = Path(__file__).parent.parent.parent
 
 NORMALIZED_DF = pd.read_csv(
-    'etc/geoloc/geoloc_normalized.csv',
+    _APP_DIR / "etc" / "geoloc" / "geoloc_normalized.csv",
     sep=",",
     dtype={"city": str}
 )
 COMPLETE_DF = pd.read_csv(
-    'etc/geoloc/geoloc_not_normalized.csv',
+    _APP_DIR / "etc" / "geoloc" / "geoloc_not_normalized.csv",
     sep=",",
     dtype={
         "postal_code": str,
@@ -18,7 +21,7 @@ COMPLETE_DF = pd.read_csv(
     }
 )
 FRENCH_DEPS_DF = pd.read_csv(
-    'etc/geoloc/french_deps.csv',
+    _APP_DIR / "etc" / "geoloc" / "french_deps.csv",
     sep=",",
     dtype={
         "code": str,

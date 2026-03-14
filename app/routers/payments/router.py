@@ -6,19 +6,15 @@ import stripe
 from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from pymongo.errors import PyMongoError
 
-import routers.payments.schemas as schemas
-import routers.payments.utils as utils
-import routers.covers.utils as covers_utils
-import routers.users.utils as users_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..covers import utils as covers_utils
+from ..users import utils as users_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
+from ...dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
     get_user_from_object_id, get_db_client
-
-# configs
-global_config = utils.load_global_config()
-config = utils.load_config()
-monitoring_config = monitoring_tools.load_config()
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -35,9 +31,9 @@ logger.addHandler(handler)
 logger.info('Logger initialized')
 
 # stripe
-stripe.api_key = config["api_key"]
-accounts_endpoint_secret = config["accounts_endpoint_secret"]
-checkout_endpoint_secret = config["checkout_endpoint_secret"]
+stripe.api_key = settings.stripe_api_key
+accounts_endpoint_secret = settings.stripe_accounts_endpoint_secret
+checkout_endpoint_secret = settings.stripe_checkout_endpoint_secret
 
 # dependencies
 get_current_user = CurrentUserGetter(logger)
@@ -276,7 +272,7 @@ async def handle_stripe_accounts_webhook(request: Request, db = Depends(get_db))
 
 @router.get('/checkout-simulation', response_model=schemas.PriceWithFees)
 async def get_checkout_simulation(subtotal: int):
-    return utils.calculate_checkout(subtotal, config['fees_coeff'])
+    return utils.calculate_checkout(subtotal, settings.fees_coeff)
 
 @router.get('/get-checkout-session/{cover_id}', response_model=schemas.Checkout)
 async def get_checkout(
@@ -383,7 +379,7 @@ async def get_checkout(
                         "message": "Vous acceptez nos [Conditions Générales de Vente](https://lerepairedeletalon.alexandrevenot.ovh/conditions-generales-de-vente)."
                     }
                 },
-                return_url=f"{global_config['frontend_url']}/tableau-de-bord?coverId={str(cover_in_db['_id'])}&pollCoverStatus={'downpaid' if payment_part == 'advance' else 'fullypaid'}"
+                return_url=f"{settings.frontend_url}/tableau-de-bord?coverId={str(cover_in_db['_id'])}&pollCoverStatus={'downpaid' if payment_part == 'advance' else 'fullypaid'}"
             )
         except (KeyError, stripe.error.StripeError) as exc:
             logger.error("failed to create checkout session: %s", traceback.format_exc())
@@ -477,7 +473,7 @@ async def handle_stripe_checkout_webhook(
                 background_tasks.add_task(
                     monitoring_tools.send_telegram_message,
                     message,
-                    monitoring_config["telegram_api_key"],
+                    settings.telegram_api_key,
                     logger
                 )
                 if first_cover_sold_id is None:
@@ -502,7 +498,7 @@ async def handle_stripe_checkout_webhook(
                 background_tasks.add_task(
                     monitoring_tools.send_telegram_message,
                     message,
-                    monitoring_config["telegram_api_key"],
+                    settings.telegram_api_key,
                     logger
                 )
 
@@ -515,7 +511,7 @@ async def handle_stripe_checkout_webhook(
         background_tasks.add_task(
             monitoring_tools.send_telegram_message,
             message,
-            monitoring_config["telegram_api_key"],
+            settings.telegram_api_key,
             logger
         )
         users_utils.notify_user(new_status, cover_in_db["_id"], "seller", seller_in_db, buyer_in_db, db, logger)

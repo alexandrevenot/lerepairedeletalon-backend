@@ -1,23 +1,22 @@
+import json
 import traceback
 from bson.objectid import ObjectId
 from typing import Annotated
 
-import yaml
 from fastapi import HTTPException, Depends, Path, Header
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
 from google.cloud import storage
+from google.oauth2 import service_account
 
-import routers.auth.utils as auth_utils
-
-with open('etc/config.yaml', 'r', encoding='utf-8') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
+from .routers.auth.utils import verify_token
+from app.config import settings
 
 mongodb_client_instance: MongoClient = None
 
 def get_db() -> Database:
-    return getattr(mongodb_client_instance, config['db_to_use'])
+    return getattr(mongodb_client_instance, settings.db_to_use)
 
 def get_db_client() -> MongoClient:
     return mongodb_client_instance
@@ -57,7 +56,7 @@ class CurrentUserGetter:
         except (IndexError, AttributeError) as exc:
             raise HTTPException(status_code=401, detail='token not found in the request') from exc
 
-        _id = auth_utils.verify_token(token, 'access')
+        _id = verify_token(token, 'access')
 
         try:
             user_in_db = db.users.find_one({'_id': _id})
@@ -77,7 +76,7 @@ async def get_current_user_id(authorization: Annotated[str | None, Header()] = N
     except (IndexError, AttributeError) as exc:
         raise HTTPException(status_code=401, detail='token not found in the request') from exc
 
-    return auth_utils.verify_token(token, 'access')
+    return verify_token(token, 'access')
 
 class CoverInDBGetter:
     def __init__(self, logger):
@@ -127,7 +126,9 @@ class ObjectStorageManager:
     def __new__(cls, bucket_name: str):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.client = storage.Client()
+            credentials_info = json.loads(settings.gcp_credentials_json)
+            credentials = service_account.Credentials.from_service_account_info(credentials_info)
+            cls._instance.client = storage.Client(credentials=credentials)
             cls._instance.buckets = {}
 
         if bucket_name not in cls._instance.buckets.keys():

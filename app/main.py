@@ -1,31 +1,29 @@
-import yaml
 from pymongo import MongoClient
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-import middleware
-import dependencies
-import routers.auth.router as auth_router
-import routers.stallions.router as stallions_router
-import routers.covers.router as covers_router
-import routers.geoloc.router as geoloc_router
-import routers.payments.router as payments_router
-import routers.contracts.router as contracts_router
-import routers.users.router as users_router
-import routers.mailing.router as mailing_router
-import routers.admin.router as admin_router
-import routers.stallion_owners.router as stallion_owners_router
+from . import middleware
+from . import dependencies
+from .routers.auth import router as auth_router
+from .routers.stallions import router as stallions_router
+from .routers.covers import router as covers_router
+from .routers.geoloc import router as geoloc_router
+from .routers.payments import router as payments_router
+from .routers.contracts import router as contracts_router
+from .routers.users import router as users_router
+from .routers.mailing import router as mailing_router
+from .routers.admin import router as admin_router
+from .routers.stallion_owners import router as stallion_owners_router
 
-with open('etc/config.yaml', 'r', encoding='utf-8') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
+from app.config import settings
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 @app.on_event("startup")
 async def start():
     dependencies.mongodb_client_instance = MongoClient(
-        f"mongodb+srv://{config['db_username']}:{config['db_password']}@{config['mongo_url']}",
+        f"mongodb+srv://{settings.db_username}:{settings.db_password}@{settings.mongo_url}",
         tls=True
     )
 

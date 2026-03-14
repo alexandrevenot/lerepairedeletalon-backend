@@ -1,21 +1,10 @@
 import traceback
-import yaml
 
 from bson.objectid import ObjectId
 from pymongo.errors import PyMongoError
 
-import routers.covers.utils as cover_utils
-import routers.mailing.utils as mailing_utils
-
-covers_config = cover_utils.load_config()
-
-def load_global_config() -> dict:
-    with open('etc/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-def load_config() -> dict:
-    with open('etc/users/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
+from ..mailing import utils as mailing_utils
+from app.config import settings
 
 def notify_user(new_status: str, cover_id: ObjectId, destination_pov: str, user_in_db: dict, notifier_in_db: str, db, logger):
     try:
@@ -24,11 +13,11 @@ def notify_user(new_status: str, cover_id: ObjectId, destination_pov: str, user_
             {
                 "$pull": {
                     f"notifications.covers.{destination_pov}.{group}": {"$in": [cover_id]}
-                        for group in covers_config["destination-pov-and-status-to-group"][destination_pov].values()
-                        if group != covers_config['destination-pov-and-status-to-group'][destination_pov][new_status]
+                        for group in settings.destination_pov_and_status_to_group[destination_pov].values()
+                        if group != settings.destination_pov_and_status_to_group[destination_pov][new_status]
                 },
                 "$addToSet": {
-                    f"notifications.covers.{destination_pov}.{covers_config['destination-pov-and-status-to-group'][destination_pov][new_status]}": cover_id
+                    f"notifications.covers.{destination_pov}.{settings.destination_pov_and_status_to_group[destination_pov][new_status]}": cover_id
                 }
             }
         )

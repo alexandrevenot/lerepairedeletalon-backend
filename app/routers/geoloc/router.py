@@ -4,8 +4,8 @@ import traceback
 
 from fastapi import APIRouter, HTTPException
 
-import routers.geoloc.schemas as schemas
-import routers.geoloc.utils as utils
+from . import utils
+from . import schemas
 
 # logging
 logger = logging.getLogger(__name__)

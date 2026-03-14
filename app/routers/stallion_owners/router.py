@@ -6,11 +6,9 @@ from bson.objectid import ObjectId
 from fastapi import APIRouter, HTTPException, Depends
 from pymongo.errors import PyMongoError
 
-import routers.stallion_owners.router as router
-import routers.stallion_owners.schemas as schemas
-import routers.stallion_owners.utils as utils
+from . import schemas
 
-from dependencies import get_db, CurrentUserGetter, StallionOwnerInDBGetter
+from ...dependencies import get_db, CurrentUserGetter, StallionOwnerInDBGetter
 
 # logging
 logger = logging.getLogger(__name__)

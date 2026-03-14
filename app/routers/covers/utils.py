@@ -1,22 +1,13 @@
 import traceback
-import yaml
 from datetime import datetime, date
 
 from fastapi import HTTPException
 from pymongo.errors import PyMongoError
 
-def load_global_config() -> dict:
-    with open('etc/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-def load_config() -> dict:
-    with open('etc/covers/config.yaml', 'r', encoding="utf-8") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-
-config = load_config()
+from app.config import settings
 
 def check_status_graph(status: str, next_status: str, pov: str):
-    graph = config[f'{pov}_status_graph']
+    graph = getattr(settings, f'{pov}_status_graph')
     return graph[status] is not None and next_status in graph[status]
 
 async def step_forward_cover(cover_in_db: dict, next_status: str, db, logger, session=None):

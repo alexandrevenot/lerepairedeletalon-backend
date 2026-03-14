@@ -7,23 +7,14 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pymongo.errors import PyMongoError
 
-import routers.covers.utils as utils
-import routers.covers.schemas as schemas
-import routers.payments.utils as payments_utils
-import routers.contracts.utils as contracts_utils
-import routers.stallions.utils as stallions_utils
-import routers.users.utils as users_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..payments import utils as payments_utils
+from ..users import utils as users_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
-
-# configs
-global_config = utils.load_global_config()
-config = utils.load_config()
-payments_config = payments_utils.load_config()
-contracts_config = contracts_utils.load_config()
-stallions_config = stallions_utils.load_config()
-monitoring_config = monitoring_tools.load_config()
+from ...dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -142,14 +133,14 @@ async def create_cover(
         "cursor_index": 1,
         "timestamps_list": [{
             "status": step,
-            "timestamp": datetime.now() if step == config["status"][0] else None
-        } for step in config["status"][:-1]]
+            "timestamp": datetime.now() if step == settings.cover_status[0] else None
+        } for step in settings.cover_status[:-1]]
     }
 
     ## insert payment details
     checkout = payments_utils.calculate_checkout(
         stallion_in_db["cover_specs"][cover.cover_type]["price"],
-        payments_config["fees_coeff"]
+        settings.fees_coeff
     )
     new_document.update(checkout.model_dump())
 
@@ -159,7 +150,7 @@ async def create_cover(
 
     ## insert information left
     new_document.update({
-        "status": config["status"][0],
+        "status": settings.cover_status[0],
         "buyer_id": current_user["_id"],
         "stallion_owner_id": stallion_in_db["stallion_owner_id"],
         "stallion_name": stallion_in_db["name"],
@@ -199,7 +190,7 @@ async def create_cover(
     background_tasks.add_task(
         monitoring_tools.send_telegram_message,
         message,
-        monitoring_config["telegram_api_key"],
+        settings.telegram_api_key,
         logger
     )
 
@@ -224,7 +215,7 @@ async def manually_step_forward_cover(
         raise HTTPException(status_code=403, detail="no permissions to step this cover forward")
 
     if query.next_status == "approved" \
-    and cover_in_db["cover_type"] in stallions_config["onsite_cover_types"] \
+    and cover_in_db["cover_type"] in settings.onsite_cover_types \
     and "arrival_date" not in cover_in_db:
         raise HTTPException(status_code=409, detail="an arrival date has to be provided")
 
@@ -248,7 +239,7 @@ async def manually_step_forward_cover(
     background_tasks.add_task(
         monitoring_tools.send_telegram_message,
         message,
-        monitoring_config["telegram_api_key"],
+        settings.telegram_api_key,
         logger
     )
 
@@ -270,13 +261,13 @@ async def edit_cover(
     updated_fields = {}
 
     if query.arrival_date != "":
-        if cover_in_db["cover_type"] in stallions_config["remote_cover_types"]:
+        if cover_in_db["cover_type"] in settings.remote_cover_types:
             raise HTTPException(status_code=403, detail="arrival date cannot be set on this cover type")
 
         updated_fields["arrival_date"] = utils.check_arrival_date(query.arrival_date)
 
     if query.new_subtotal is not None:
-        checkout = payments_utils.calculate_checkout(query.new_subtotal, payments_config["fees_coeff"])
+        checkout = payments_utils.calculate_checkout(query.new_subtotal, settings.fees_coeff)
         updated_fields.update(checkout.model_dump())
 
     try:
@@ -296,14 +287,14 @@ async def edit_cover(
 @router.get('/cover-group', response_model=schemas.GetCoverGroupRM)
 async def get_cover_group(group: str, point_of_view: str, user_id = Depends(get_current_user_id), db = Depends(get_db)):
     # data validation
-    if group not in config["groups"].keys():
+    if group not in settings.cover_groups.keys():
         raise HTTPException(status_code=422, detail="invalid group")
 
     if point_of_view not in ["seller", "buyer"]:
         raise HTTPException(status_code=422, detail="invalid point of view")
 
     # db querying
-    status_l = config["groups"][group]
+    status_l = settings.cover_groups[group]
     pattern = {
         'status': {'$in': status_l},
         point_of_view + '_id': user_id

@@ -9,20 +9,15 @@ from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, BackgroundTasks, Header
 from pymongo.errors import PyMongoError
 
-import routers.stallions.utils as utils
-import routers.stallions.schemas as schemas
-import routers.geoloc.utils as geoloc_utils
-import routers.payments.utils as payments_utils
-import monitoring.tools as monitoring_tools
+from . import utils
+from . import schemas
+from ..geoloc import utils as geoloc_utils
+from ..payments import utils as payments_utils
+from ...monitoring import tools as monitoring_tools
 
-from dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
+from ...dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
     get_db_client, BucketGetter, get_current_user_id, get_stallion_owner_in_db
-
-# configs
-global_config = utils.load_global_config()
-config = utils.load_config()
-payments_config = payments_utils.load_config()
-monitoring_config = monitoring_tools.load_config()
+from app.config import settings
 
 # logging
 logger = logging.getLogger(__name__)
@@ -41,7 +36,7 @@ logger.info('Logger initialized')
 # dependencies
 get_current_user = CurrentUserGetter(logger)
 get_stallion_in_db = StallionInDBGetter(logger)
-get_stalllion_photos_bucket = BucketGetter(global_config['stallion_photos_bucket_name'])
+get_stalllion_photos_bucket = BucketGetter(settings.stallion_photos_bucket_name)
 
 # routes
 router = APIRouter(prefix='/stallions')
@@ -73,7 +68,7 @@ async def search(
 
     if cover_types is not None:
         for cover_type in cover_types:
-            if cover_type not in config["cover_types"]:
+            if cover_type not in settings.cover_types:
                 raise HTTPException(status_code=422, detail="a cover type is not allowed")
 
     query = {}
@@ -83,19 +78,19 @@ async def search(
     if min_price is not None:
         min_price = payments_utils.calculate_corresponding_subtotal(
             min_price,
-            payments_config['fees_coeff']
+            settings.fees_coeff
         )
         price_query["$gte"] = min_price
 
     if max_price is not None:
         max_price = payments_utils.calculate_corresponding_subtotal(
             max_price,
-            payments_config['fees_coeff']
+            settings.fees_coeff
         )
         price_query["$lte"] = max_price
 
     if price_query:
-        query["$or"] = [{f'cover_specs.{cover_type}.price': price_query} for cover_type in config["cover_types"]]
+        query["$or"] = [{f'cover_specs.{cover_type}.price': price_query} for cover_type in settings.cover_types]
 
     # breed
     if breeds is not None:
@@ -132,7 +127,7 @@ async def search(
     # cover type
     if cover_types is not None:
         if price_query:
-            for cover_type in [elt for elt in config["cover_types"] if elt not in cover_types]:
+            for cover_type in [elt for elt in settings.cover_types if elt not in cover_types]:
                 query["$or"].remove({f'cover_specs.{cover_type}.price': price_query})
         else:
             query["$or"] = [{f'cover_specs.{cover_type}': {"$exists": True}} for cover_type in cover_types]
@@ -157,7 +152,7 @@ async def search(
             city=document["city"],
             dep_name=document["dep_name"],
             reg_name=document["reg_name"],
-            price=utils.get_displayed_price(document, min_price, max_price, config["cover_types"]) if cover_types is None \
+            price=utils.get_displayed_price(document, min_price, max_price, settings.cover_types) if cover_types is None \
                 else utils.get_displayed_price(document, min_price, max_price, cover_types),
             photo_url=document["thumbnail_photo"]
         ))
@@ -381,16 +376,16 @@ async def register_new_stallion_files(
         raise HTTPException(status_code=422, detail="there must be atleast 1 photo")
 
     for photo_f in photos:
-        if photo_f.content_type not in config['allowed_photos_content_types']:
+        if photo_f.content_type not in settings.allowed_photos_content_types:
             raise HTTPException(status_code=422, detail="a photo content type is not allowed")
-        if photo_f.size > config['photo_max_size']:
+        if photo_f.size > settings.photo_max_size:
             raise HTTPException(status_code=422, detail="a photo is too large")
 
     data = await photos[0].read()
     content_type = photos[0].content_type
 
     try:
-        thumbnail_photo, tp_content_type = utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
+        thumbnail_photo, tp_content_type = utils.get_thumbnail_photo_data(data, content_type, settings.photo_low_res_width)
     except Exception as exc:
         logger.error("failed to process photos: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="failed to process photos") from exc
@@ -437,7 +432,7 @@ async def register_new_stallion_files(
             background_tasks.add_task(
                 monitoring_tools.send_telegram_message,
                 message,
-                monitoring_config["telegram_api_key"],
+                settings.telegram_api_key,
                 logger
             )
 
@@ -554,9 +549,9 @@ async def update_stallion_photos(
         raise HTTPException(status_code=422, detail="there must remain atleast 1 photo")
 
     for photo_f in new_photos:
-        if photo_f.content_type not in config['allowed_photos_content_types']:
+        if photo_f.content_type not in settings.allowed_photos_content_types:
             raise HTTPException(status_code=422, detail="a photo content type is not allowed")
-        if photo_f.size > config['photo_max_size']:
+        if photo_f.size > settings.photo_max_size:
             raise HTTPException(status_code=422, detail="one of the photos is too large")
 
     # thumbnail
@@ -572,7 +567,7 @@ async def update_stallion_photos(
             content_type = new_thumbnail_photo_blob.content_type
 
         try:
-            new_thumbnail_photo, new_tp_content_type = utils.get_thumbnail_photo_data(data, content_type, config['photo_low_res_width'])
+            new_thumbnail_photo, new_tp_content_type = utils.get_thumbnail_photo_data(data, content_type, settings.photo_low_res_width)
         except KeyError as exc:
             if str(exc) == "'OCTET-STREAM'":
                 raise HTTPException(status_code=422, detail="issue on image format") from exc
