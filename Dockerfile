@@ -1,7 +1,32 @@
-FROM tiangolo/uvicorn-gunicorn-fastapi:python3.11-2024-08-25
+# Builder
+FROM python:3.11-slim AS builder
 
-COPY ./app_build/requirements.txt /app/requirements.txt
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+WORKDIR /srv
 
-COPY ./app_build /app
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY app/ ./app/
+
+RUN uv sync --frozen --no-dev
+
+# Runtime
+FROM python:3.11-slim AS runtime
+
+WORKDIR /srv
+
+COPY --from=builder /srv/.venv /srv/.venv
+COPY --from=builder /srv/app /srv/app
+
+ENV PATH="/srv/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+RUN mkdir -p /srv/logs
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

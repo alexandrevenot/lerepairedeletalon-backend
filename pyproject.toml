@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lrde-backend"
-version = "0.0.8"
+version = "0.0.9"
 requires-python = ">=3.11"
 dependencies = [
     "google-resumable-media>=2.7.0",
