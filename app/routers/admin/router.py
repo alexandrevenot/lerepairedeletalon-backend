@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import traceback
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import SecretStr
@@ -13,6 +14,8 @@ from ..auth.utils import verify_password
 from . import schemas
 
 # logging
+log_dir = Path(__file__).parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(20)
 handler = logging.handlers.RotatingFileHandler(
