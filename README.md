@@ -72,7 +72,6 @@ server/
 │       ├── resources/         # Test assets (images)
 │       └── test_*.py          # One test file per router
 ├── Dockerfile                 # Multi-stage build (uv + python:3.11-slim)
-├── docker-compose.yml         # Traefik + backend + frontend
 ├── pyproject.toml             # Dependencies, build config, ruff and pytest settings
 └── uv.lock                    # Locked dependency tree
 ```
