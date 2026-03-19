@@ -3,6 +3,7 @@ import logging.handlers
 import math
 import traceback
 from datetime import datetime
+from pathlib import Path
 
 from bson.objectid import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,8 @@ from ..payments import utils as payments_utils
 from . import schemas
 
 # logging
+log_dir = Path(__file__).parent.parent.parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(20)
 handler = logging.handlers.RotatingFileHandler(

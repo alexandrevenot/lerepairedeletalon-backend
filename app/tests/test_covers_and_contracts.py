@@ -14,7 +14,7 @@ from app.routers.payments.utils import calculate_advance
 
 
 async def test(fake_db, stallion_owners_client, auth_client, payments_client, contracts_client, stallions_client, users_client, covers_client):
-    with open('tests/resources/sellefrançais.jpg', 'rb') as f:
+    with open('app/tests/resources/sellefrançais.jpg', 'rb') as f:
         ph = f.read()
 
     # register a new user

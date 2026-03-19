@@ -35,7 +35,7 @@ class SMTPDummySession:
 
 def _make_bucket_mock():
     fake_blob = unittest.mock.Mock()
-    with open('tests/resources/sellefrançais.jpg', 'rb') as f:
+    with open('app/tests/resources/sellefrançais.jpg', 'rb') as f:
         fake_blob.download_as_string.return_value = f.read()
     fake_blob.content_type = 'image/jpg'
     bucket = unittest.mock.Mock()

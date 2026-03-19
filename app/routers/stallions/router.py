@@ -4,6 +4,7 @@ import logging.handlers
 import traceback
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, UploadFile
@@ -26,6 +27,8 @@ from ..payments import utils as payments_utils
 from . import schemas, utils
 
 # logging
+log_dir = Path(__file__).parent.parent.parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(20)
 handler = logging.handlers.RotatingFileHandler(

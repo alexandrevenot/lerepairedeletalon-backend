@@ -3,6 +3,7 @@ import logging.handlers
 import os
 import smtplib
 import traceback
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pymongo.errors import PyMongoError
@@ -15,6 +16,8 @@ from ..mailing import utils as mailing_utils
 from . import schemas, utils
 
 # logging
+log_dir = Path(__file__).parent.parent.parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(20)
 handler = logging.handlers.RotatingFileHandler(
