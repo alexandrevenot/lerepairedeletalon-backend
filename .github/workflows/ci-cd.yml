@@ -100,5 +100,5 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /home/debian/lerepairedeletalon
-            docker compose pull lrde-backend
-            docker compose up -d lrde-backend
+            sudo docker compose pull lrde-backend
+            sudo docker compose up -d lrde-backend
