@@ -3,8 +3,10 @@ import traceback
 from bson.objectid import ObjectId
 from pymongo.errors import PyMongoError
 
-from ..mailing import utils as mailing_utils
 from app.config import settings
+
+from ..mailing import utils as mailing_utils
+
 
 def notify_user(new_status: str, cover_id: ObjectId, destination_pov: str, user_in_db: dict, notifier_in_db: str, db, logger):
     try:

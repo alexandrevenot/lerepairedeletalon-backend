@@ -1,5 +1,6 @@
 from app.routers.auth.utils import verify_password
 
+
 def test(auth_client, mailing_client, fake_db):
     # register a new user
     response = auth_client.post('/auth/register', json={

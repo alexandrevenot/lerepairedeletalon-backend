@@ -1,5 +1,12 @@
 from unittest.mock import Mock, patch
-from app.routers.payments.utils import calculate_checkout, calculate_balance, calculate_advance, calculate_corresponding_subtotal
+
+from app.routers.payments.utils import (
+    calculate_advance,
+    calculate_balance,
+    calculate_checkout,
+    calculate_corresponding_subtotal,
+)
+
 
 def test(auth_client, users_client, payments_client, fake_db):
     subtotal = 200
@@ -117,17 +124,17 @@ def test(auth_client, users_client, payments_client, fake_db):
         user_in_db = fake_db.users.find_one({})
         assert user_in_db["stripe_account"]["account"]["id"] == "acct"
         assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["status"] == "pending"
-        assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["document"]["details_code"] == None
-        assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["additional_document"]["details_code"] == None
+        assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["document"]["details_code"] is None
+        assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["additional_document"]["details_code"] is None
         assert user_in_db["stripe_account"]["account"]["requirements"]["currently_due"] == []
 
         response = payments_client.get('/payments/stripe-account', headers=headers)
         assert response.status_code == 200
         response_content = response.json()
-        assert response_content["currently_due_is_empty"] == True
+        assert response_content["currently_due_is_empty"] 
         assert response_content["identity_document_status"] == "pending"
         assert response_content["proof_of_residence_status"] == "pending"
-        assert response_content["proof_of_company_status"] == None
+        assert response_content["proof_of_company_status"] is None
 
         # working json but stripe account already exists
         body = {
@@ -173,6 +180,6 @@ def test(auth_client, users_client, payments_client, fake_db):
         user_in_db = fake_db.users.find_one({})
         assert user_in_db["stripe_account"]["account"]["id"] == "acct"
         assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["status"] == "unverified"
-        assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["document"]["details_code"] == None
+        assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["document"]["details_code"] is None
         assert user_in_db["stripe_account"]["account"]["individual"]["verification"]["additional_document"]["details_code"] == "err_ugly_document"
         assert user_in_db["stripe_account"]["account"]["requirements"]["currently_due"] == ["individual.verification.additional_document.front"]

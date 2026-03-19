@@ -1,9 +1,11 @@
-import aiohttp
 from datetime import timedelta
+
+import aiohttp
+
+from app.config import settings
 
 from ..payments import utils as payments_utils
 
-from app.config import settings
 
 def build_identification_field(stallion_owner_in_db: None | dict, user_in_db: dict):
     if stallion_owner_in_db is None:

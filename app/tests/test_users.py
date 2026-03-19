@@ -35,7 +35,7 @@ def test(auth_client, users_client, fake_db):
     assert returned_json["lastname"] == "Dupont"
     assert returned_json["email"] == "lrdeservice@gmail.com"
     assert returned_json["phone_number"] == "0665824651"
-    assert returned_json["legal_identity"] == None
+    assert returned_json["legal_identity"] is None
 
     # try to put legal identity but bad date format
     response = users_client.put('/users/legal-identity', headers={"Authorization": f"Bearer {access_token}"},
@@ -60,7 +60,7 @@ def test(auth_client, users_client, fake_db):
     assert returned_json["lastname"] == "Dupont"
     assert returned_json["email"] == "lrdeservice@gmail.com"
     assert returned_json["phone_number"] == "0665824651"
-    assert returned_json["legal_identity"] == None
+    assert returned_json["legal_identity"] is None
 
     # put legal identity with incomplete body (should still return 200)
     working_json = {

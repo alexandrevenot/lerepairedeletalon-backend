@@ -1,17 +1,18 @@
 import json
 import traceback
-from bson.objectid import ObjectId
 from typing import Annotated
 
-from fastapi import HTTPException, Depends, Path, Header
+from bson.objectid import ObjectId
+from fastapi import Depends, Header, HTTPException, Path
+from google.cloud import storage
+from google.oauth2 import service_account
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
-from google.cloud import storage
-from google.oauth2 import service_account
+
+from app.config import settings
 
 from .routers.auth.utils import verify_token
-from app.config import settings
 
 mongodb_client_instance: MongoClient = None
 

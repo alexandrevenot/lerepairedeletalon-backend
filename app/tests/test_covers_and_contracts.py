@@ -1,15 +1,17 @@
-import pytest
 import datetime
-from unittest.mock import Mock, MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+import pytest
 from aioresponses import aioresponses
-from fastapi import HTTPException
 from bson.objectid import ObjectId
+from fastapi import HTTPException
 from freezegun import freeze_time
 
-from app.routers.covers.utils import check_arrival_date
-from app.routers.contracts.utils import create_and_send_contract
-from app.routers.payments.utils import calculate_advance
 from app.config import settings
+from app.routers.contracts.utils import create_and_send_contract
+from app.routers.covers.utils import check_arrival_date
+from app.routers.payments.utils import calculate_advance
+
 
 async def test(fake_db, stallion_owners_client, auth_client, payments_client, contracts_client, stallions_client, users_client, covers_client):
     with open('tests/resources/sellefrançais.jpg', 'rb') as f:
@@ -532,7 +534,7 @@ async def test(fake_db, stallion_owners_client, auth_client, payments_client, co
 
     cover_in_db = fake_db.covers.find_one({"_id": cover_in_db["_id"]})
     assert cover_in_db["status"] == settings.cover_status[1]
-    assert not cover_in_db["timestamps"]["timestamps_list"][1]["status"] is None
+    assert cover_in_db["timestamps"]["timestamps_list"][1]["status"] is not None
 
     # when the cover is already approved
     response = covers_client.post(f'/covers/step-forward-cover/{cover_id}', json={"next_status": "approved"}, headers=owner_headers)
@@ -581,7 +583,7 @@ async def test(fake_db, stallion_owners_client, auth_client, payments_client, co
     patch('app.routers.payments.router.stripe.Account.create', new_callable=Mock) as mock1, \
     patch('app.routers.payments.router.stripe.Account.create_person', new_callable=Mock) as mock2, \
     patch('app.routers.payments.router.stripe.Account.create_external_account', new_callable=Mock) as mock3, \
-    patch('app.routers.payments.router.stripe.Webhook.construct_event', new_callable=Mock) as mock4:
+    patch('app.routers.payments.router.stripe.Webhook.construct_event', new_callable=Mock):
         mock0.return_value=({
             "data": {
                 "contract": {
@@ -1435,7 +1437,7 @@ async def test(fake_db, stallion_owners_client, auth_client, payments_client, co
     assert response.json()["lastname"] == "Dupont"
     assert response.json()["score"] == 4.5
     assert response.json()["nb_reviews"] == 2
-    assert response.json()["owner_has_other_reviews"] == False
+    assert not response.json()["owner_has_other_reviews"]
 
     response = users_client.get(f'/users/user-score/{seller_id}?cover_pov=seller&stallion_nsire=591784564X', headers=headers)
     assert response.status_code == 200
@@ -1443,7 +1445,7 @@ async def test(fake_db, stallion_owners_client, auth_client, payments_client, co
     assert response.json()["lastname"] == "Dupont"
     assert response.json()["score"] == 4
     assert response.json()["nb_reviews"] == 1
-    assert response.json()["owner_has_other_reviews"] == True
+    assert response.json()["owner_has_other_reviews"] 
 
     response = users_client.get(f'/users/user-score/{client_id}?cover_pov=buyer', headers=headers)
     assert response.status_code == 200
@@ -1451,42 +1453,46 @@ async def test(fake_db, stallion_owners_client, auth_client, payments_client, co
     assert response.json()["lastname"] == "Lagraphe"
     assert response.json()["score"] == 1.5
     assert response.json()["nb_reviews"] == 2
-    assert response.json()["owner_has_other_reviews"] == False
+    assert not response.json()["owner_has_other_reviews"]
 
     # when such notes do not exist
     response = users_client.get(f'/users/user-score/{seller_id}?cover_pov=buyer', headers=headers)
     assert response.status_code == 200
     assert response.json()["firstname"] == "Michel"
     assert response.json()["lastname"] == "Dupont"
-    assert response.json()["score"] == None
-    assert response.json()["nb_reviews"] == None
-    assert response.json()["owner_has_other_reviews"] == False
+    assert response.json()["score"] is None
+    assert response.json()["nb_reviews"] is None
+    assert not response.json()["owner_has_other_reviews"]
 
     response = users_client.get(f'/users/user-score/{seller_id}?cover_pov=buyer&stallion_nsire=591784564X', headers=headers)
     assert response.status_code == 200
     assert response.json()["firstname"] == "Michel"
     assert response.json()["lastname"] == "Dupont"
-    assert response.json()["score"] == None
-    assert response.json()["nb_reviews"] == None
-    assert response.json()["owner_has_other_reviews"] == False
+    assert response.json()["score"] is None
+    assert response.json()["nb_reviews"] is None
+    assert not response.json()["owner_has_other_reviews"]
 
     response = users_client.get(f'/users/user-score/{client_id}?cover_pov=seller', headers=headers)
     assert response.status_code == 200
     assert response.json()["firstname"] == "Joris"
     assert response.json()["lastname"] == "Lagraphe"
-    assert response.json()["score"] == None
-    assert response.json()["nb_reviews"] == None
-    assert response.json()["owner_has_other_reviews"] == False
+    assert response.json()["score"] is None
+    assert response.json()["nb_reviews"] is None
+    assert not response.json()["owner_has_other_reviews"]
 
 def test_arrival_date():
     with freeze_time("2000-04-15"):
         check_arrival_date("15/04/2000")
         check_arrival_date("30/09/2000")
-        with pytest.raises(HTTPException): check_arrival_date("14/04/2000")
-        with pytest.raises(HTTPException): check_arrival_date("01/10/2000")
+        with pytest.raises(HTTPException):
+            check_arrival_date("14/04/2000")
+        with pytest.raises(HTTPException):
+            check_arrival_date("01/10/2000")
 
     with freeze_time("2000-10-15"):
         check_arrival_date("01/01/2001")
         check_arrival_date("30/09/2001")
-        with pytest.raises(HTTPException): check_arrival_date("31/12/2000")
-        with pytest.raises(HTTPException): check_arrival_date("01/10/2001")
+        with pytest.raises(HTTPException):
+            check_arrival_date("31/12/2000")
+        with pytest.raises(HTTPException):
+            check_arrival_date("01/10/2001")

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.config import settings
 
+
 class MosaicProfileInfo(BaseModel):
     id: str
     name: str

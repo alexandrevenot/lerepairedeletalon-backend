@@ -1,7 +1,7 @@
-import smtplib
 from email.message import EmailMessage
 
 from app.config import settings
+
 
 def build_email_content(
     verification_link: str,

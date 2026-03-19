@@ -1,11 +1,12 @@
-from typing import Any, Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, field_validator, Field
 from fastapi import HTTPException
+from pydantic import BaseModel, Field, field_validator
+
+from app.config import settings
 
 from ..stallions import schemas as stallions_schemas
 
-from app.config import settings
 
 class CoverQuery(BaseModel):
     seller_id: str

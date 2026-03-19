@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import HTTPException
-from pydantic import BaseModel, model_validator, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
+
 
 class GetUserRM(BaseModel):
     firstname: str
@@ -115,7 +116,7 @@ class BuyerNotifications(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def calculate_sums(cls, values):
-        return {key: [str(elt) for elt in l] for key, l in values.items()}
+        return {key: [str(elt) for elt in lst] for key, lst in values.items()}
 
 class SellerNotifications(BaseModel):
     pendingApproval: list[str] | None = None
@@ -126,7 +127,7 @@ class SellerNotifications(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def calculate_sums(cls, values):
-        return {key: [str(elt) for elt in l] for key, l in values.items()}
+        return {key: [str(elt) for elt in lst] for key, lst in values.items()}
 
 class CoverNotifications(BaseModel):
     buyer: BuyerNotifications | None = None

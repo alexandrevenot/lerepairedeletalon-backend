@@ -1,4 +1,5 @@
 import unittest.mock
+
 import mongomock
 import pytest
 from fastapi import FastAPI
@@ -51,7 +52,7 @@ def auth_client():
     app = FastAPI()
     app.dependency_overrides[auth_router.get_db] = _get_db
     app.dependency_overrides[auth_router.get_db_client] = lambda: DummyClient()
-    auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
+    #auth_router.mailing_utils.smtplib.SMTP = SMTPDummySession
     auth_router.monitoring_tools.send_telegram_message = unittest.mock.Mock()
     app.include_router(auth_router.router)
     return TestClient(app)

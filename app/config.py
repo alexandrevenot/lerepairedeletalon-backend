@@ -1,6 +1,7 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, List, Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _APP_DIR = Path(__file__).parent
 

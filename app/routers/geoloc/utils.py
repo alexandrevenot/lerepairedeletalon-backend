@@ -1,7 +1,8 @@
-import pandas as pd
 import bisect
 import unicodedata
 from pathlib import Path
+
+import pandas as pd
 
 _APP_DIR = Path(__file__).parent.parent.parent
 
