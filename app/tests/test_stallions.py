@@ -7,9 +7,9 @@ from app.routers.stallions.utils import calculate_age
 
 
 def test(auth_client, stallions_client, stallion_owners_client, fake_db):
-    with open('tests/resources/sellefrançais.jpg', 'rb') as f:
+    with open('app/tests/resources/sellefrançais.jpg', 'rb') as f:
         ph = f.read()
-    with open('tests/resources/photo_too_large.jpg', 'rb') as f:
+    with open('app/tests/resources/photo_too_large.jpg', 'rb') as f:
         phtl = f.read()
 
     # register a new user
