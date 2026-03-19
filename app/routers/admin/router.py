@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import SecretStr
 from pymongo.errors import PyMongoError
 
-from . import schemas
-
-from ...dependencies import get_db, StallionInDBGetter, UserInDBGetter, StallionOwnerInDBGetter
-from ..auth.utils import verify_password
 from app.config import settings
+
+from ...dependencies import StallionInDBGetter, StallionOwnerInDBGetter, UserInDBGetter, get_db
+from ..auth.utils import verify_password
+from . import schemas
 
 # logging
 logger = logging.getLogger(__name__)

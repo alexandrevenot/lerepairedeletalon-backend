@@ -1,4 +1,5 @@
-from app.routers.geoloc.utils import find_city_not_normalized, normalize, find_dep_and_region
+from app.routers.geoloc.utils import find_city_not_normalized, find_dep_and_region, normalize
+
 
 def test(geoloc_client):
     result = find_city_not_normalized('abancourt')

@@ -1,19 +1,18 @@
-import os
 import logging
 import logging.handlers
-import traceback
+import os
 import smtplib
+import traceback
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pymongo.errors import PyMongoError
 
-from . import utils
-from . import schemas
-from ..mailing import utils as mailing_utils
-from ...monitoring import tools as monitoring_tools
+from app.config import settings
 
 from ...dependencies import get_db, get_db_client
-from app.config import settings
+from ...monitoring import tools as monitoring_tools
+from ..mailing import utils as mailing_utils
+from . import schemas, utils
 
 # logging
 logger = logging.getLogger(__name__)

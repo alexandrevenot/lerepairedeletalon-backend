@@ -1,14 +1,13 @@
 import logging
 import logging.handlers
 import traceback
-from bson.objectid import ObjectId
 
-from fastapi import APIRouter, HTTPException, Depends
+from bson.objectid import ObjectId
+from fastapi import APIRouter, Depends, HTTPException
 from pymongo.errors import PyMongoError
 
+from ...dependencies import CurrentUserGetter, StallionOwnerInDBGetter, get_db
 from . import schemas
-
-from ...dependencies import get_db, CurrentUserGetter, StallionOwnerInDBGetter
 
 # logging
 logger = logging.getLogger(__name__)

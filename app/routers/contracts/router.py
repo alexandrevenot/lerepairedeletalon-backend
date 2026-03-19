@@ -1,20 +1,26 @@
-import aiohttp
 import logging
 import logging.handlers
 import traceback
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import aiohttp
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pymongo.errors import PyMongoError
 
-from . import utils
-from . import schemas
+from app.config import settings
+
+from ...dependencies import (
+    CoverInDBGetter,
+    CurrentUserGetter,
+    get_current_user_id,
+    get_db,
+    get_db_client,
+    get_stallion_owner_from_object_id,
+    get_user_from_object_id,
+)
+from ...monitoring import tools as monitoring_tools
 from ..covers import utils as covers_utils
 from ..users import utils as users_utils
-from ...monitoring import tools as monitoring_tools
-
-from ...dependencies import get_db, get_user_from_object_id, CurrentUserGetter, \
-    get_db_client, get_current_user_id, CoverInDBGetter, get_stallion_owner_from_object_id
-from app.config import settings
+from . import schemas, utils
 
 # logging
 logger = logging.getLogger(__name__)

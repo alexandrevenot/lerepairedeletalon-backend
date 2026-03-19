@@ -1,10 +1,11 @@
 import traceback
-from datetime import datetime, date
+from datetime import date, datetime
 
 from fastapi import HTTPException
 from pymongo.errors import PyMongoError
 
 from app.config import settings
+
 
 def check_status_graph(status: str, next_status: str, pov: str):
     graph = getattr(settings, f'{pov}_status_graph')

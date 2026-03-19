@@ -1,7 +1,8 @@
 import stripe
 
-from . import schemas
 from app.config import settings
+
+from . import schemas
 
 stripe.api_key = settings.stripe_api_key
 

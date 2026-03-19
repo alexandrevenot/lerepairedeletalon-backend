@@ -1,11 +1,13 @@
-from datetime import datetime, date
+from datetime import date, datetime
 from io import BytesIO
 
 from dateutil.relativedelta import relativedelta
 from PIL import Image
 
-from ..payments import utils as payments_utils
 from app.config import settings
+
+from ..payments import utils as payments_utils
+
 
 def get_displayed_price(document: dict, min_price: float, max_price: float, cover_types: list[str]) -> float:
     count = 0

@@ -1,20 +1,19 @@
 import logging
 import logging.handlers
 import traceback
-from bson.objectid import ObjectId
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from bson.objectid import ObjectId
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pymongo.errors import PyMongoError
 
-from . import utils
-from . import schemas
+from app.config import settings
+
+from ...dependencies import CoverInDBGetter, CurrentUserGetter, get_current_user_id, get_db, get_user_from_object_id
+from ...monitoring import tools as monitoring_tools
 from ..payments import utils as payments_utils
 from ..users import utils as users_utils
-from ...monitoring import tools as monitoring_tools
-
-from ...dependencies import get_db, get_user_from_object_id, CurrentUserGetter, CoverInDBGetter, get_current_user_id
-from app.config import settings
+from . import schemas, utils
 
 # logging
 logger = logging.getLogger(__name__)

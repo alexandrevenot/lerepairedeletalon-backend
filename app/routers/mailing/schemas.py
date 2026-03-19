@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class SendPasswordUpdateEmailQuery(BaseModel):
     email: str
 

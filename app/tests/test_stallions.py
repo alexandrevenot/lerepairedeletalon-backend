@@ -2,8 +2,9 @@ import datetime
 
 from bson.objectid import ObjectId
 
-from app.routers.stallions.utils import calculate_age
 from app.routers.payments.utils import calculate_checkout
+from app.routers.stallions.utils import calculate_age
+
 
 def test(auth_client, stallions_client, stallion_owners_client, fake_db):
     with open('tests/resources/sellefrançais.jpg', 'rb') as f:
@@ -564,7 +565,6 @@ def test(auth_client, stallions_client, stallion_owners_client, fake_db):
     }
     response = stallion_owners_client.post('/stallion-owners/stallion-owner', json=query, headers=headers)
     assert response.status_code == 200
-    stallion_owner_id_2 = response.json()["id"]
 
     body = {}
 

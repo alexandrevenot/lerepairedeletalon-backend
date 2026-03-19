@@ -2,6 +2,7 @@ import traceback
 
 import aiohttp
 
+
 async def send_telegram_message(message: str, telegram_api_key: str, logger) -> None:
     url = f"https://api.telegram.org/bot7956411435:{telegram_api_key}/sendMessage"
     try:

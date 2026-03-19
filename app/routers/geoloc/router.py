@@ -4,8 +4,7 @@ import traceback
 
 from fastapi import APIRouter, HTTPException
 
-from . import utils
-from . import schemas
+from . import schemas, utils
 
 # logging
 logger = logging.getLogger(__name__)

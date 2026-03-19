@@ -1,23 +1,29 @@
 import itertools
-import uuid
 import logging
 import logging.handlers
 import traceback
-from typing import Annotated
+import uuid
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, BackgroundTasks, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, UploadFile
 from pymongo.errors import PyMongoError
 
-from . import utils
-from . import schemas
+from app.config import settings
+
+from ...dependencies import (
+    BucketGetter,
+    CurrentUserGetter,
+    StallionInDBGetter,
+    get_current_user_id,
+    get_db,
+    get_db_client,
+    get_stallion_owner_in_db,
+)
+from ...monitoring import tools as monitoring_tools
 from ..geoloc import utils as geoloc_utils
 from ..payments import utils as payments_utils
-from ...monitoring import tools as monitoring_tools
-
-from ...dependencies import get_db, CurrentUserGetter, StallionInDBGetter, \
-    get_db_client, BucketGetter, get_current_user_id, get_stallion_owner_in_db
-from app.config import settings
+from . import schemas, utils
 
 # logging
 logger = logging.getLogger(__name__)

@@ -3,18 +3,16 @@ import logging.handlers
 import traceback
 
 import stripe
-from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pymongo.errors import PyMongoError
 
-from . import utils
-from . import schemas
+from app.config import settings
+
+from ...dependencies import CoverInDBGetter, CurrentUserGetter, get_db, get_db_client, get_user_from_object_id
+from ...monitoring import tools as monitoring_tools
 from ..covers import utils as covers_utils
 from ..users import utils as users_utils
-from ...monitoring import tools as monitoring_tools
-
-from ...dependencies import CurrentUserGetter, get_db, CoverInDBGetter, \
-    get_user_from_object_id, get_db_client
-from app.config import settings
+from . import schemas, utils
 
 # logging
 logger = logging.getLogger(__name__)
@@ -386,8 +384,8 @@ async def get_checkout(
             raise HTTPException(status_code=500, detail="failed to create checkout session") from exc
 
         if session.client_secret is None:
-            logger.error("failed to create checkout session: %s", traceback.format_exc())
-            raise HTTPException(status_code=500, detail="failed to create checkout session") from exc
+            logger.error("failed to create checkout session: client_secret is None")
+            raise HTTPException(status_code=500, detail="failed to create checkout session")
 
         try:
             db.covers.update_one(

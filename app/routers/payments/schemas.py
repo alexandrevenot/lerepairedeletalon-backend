@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 
+
 class CreateStripeAccountQuery(BaseModel):
     business_type: str
     account_token: str

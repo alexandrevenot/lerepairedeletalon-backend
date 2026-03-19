@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, model_validator
 from fastapi import HTTPException
+from pydantic import BaseModel, model_validator
+
 
 class StallionOwnerQuery(BaseModel):
     business_type: str
