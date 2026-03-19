@@ -11,7 +11,7 @@ from ...dependencies import CurrentUserGetter, StallionOwnerInDBGetter, get_db
 from . import schemas
 
 # logging
-log_dir = Path(__file__).parent.parent / "logs"
+log_dir = Path(__file__).parent.parent.parent.parent / "logs"
 log_dir.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(20)

@@ -16,7 +16,7 @@ from ..users import utils as users_utils
 from . import schemas, utils
 
 # logging
-log_dir = Path(__file__).parent.parent / "logs"
+log_dir = Path(__file__).parent.parent.parent.parent / "logs"
 log_dir.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(20)
