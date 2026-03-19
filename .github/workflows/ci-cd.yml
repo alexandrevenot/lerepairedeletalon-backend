@@ -59,7 +59,7 @@ jobs:
           gcp_credentials_json: "dummy"
         run: uv run pytest app/tests/ -v
 
-build-and-push:
+  build-and-push:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
