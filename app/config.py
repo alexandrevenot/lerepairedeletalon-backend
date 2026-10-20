@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     send_demo_contracts: bool = True
 
     # database
-    db_to_use: str = "admin"
+    db_to_use: str = "lrde"
     mongo_url: str = "lrde.gwvto0k.mongodb.net"
     db_username: Optional[str] = None
     db_password: Optional[str] = None
