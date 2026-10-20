@@ -22,7 +22,7 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 @app.on_event("startup")
 async def start():
     dependencies.mongodb_client_instance = MongoClient(
-        f"mongodb+srv://{settings.db_username}:{settings.db_password}@{settings.mongo_url}",
+        f"mongodb+srv://{settings.db_username}:{settings.db_password}@{settings.mongo_url}/",
         tls=True
     )
 
