@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     send_demo_contracts: bool = True
 
     # database
-    db_to_use: str = "test"
-    mongo_url: str = "mongodb-25a50afa-of01ab2eb.database.cloud.ovh.net"
+    db_to_use: str = "admin"
+    mongo_url: str = "lrde.gwvto0k.mongodb.net"
     db_username: Optional[str] = None
     db_password: Optional[str] = None
 
